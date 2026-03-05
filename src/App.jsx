@@ -1,10 +1,10 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { month1 } from './data/month1';
 import { month2 } from './data/month2';
-import { loadProgress, saveProgressLocal, loadGeneratedMonths, saveGeneratedMonth, loadWeightLogLocal, saveWeightLocal, loadProfile, saveProfile, loadBodyWeightLocal, saveBodyWeightLocal } from './utils/storage';
+import { loadProgress, saveProgressLocal, loadGeneratedMonths, saveGeneratedMonth, loadWeightLogLocal, saveWeightLocal, deleteWeightLocal, loadProfile, saveProfile, loadBodyWeightLocal, saveBodyWeightLocal } from './utils/storage';
 import { generateMonth } from './utils/generateMonth';
 import { getStoredUser, signOut, loadGoogleScript, initTokenClient, requestAccessToken } from './utils/googleAuth';
-import { findOrCreateSheet, readProgress, writeProgress, readWeightLog, appendWeightEntry, getSheetUrl, getCachedSheetId, readSettings, writeSettings, readBodyWeight, appendBodyWeight, ensureBodyWeightTab } from './utils/googleSheets';
+import { findOrCreateSheet, readProgress, writeProgress, readWeightLog, appendWeightEntry, deleteWeightEntry, getSheetUrl, getCachedSheetId, readSettings, writeSettings, readBodyWeight, appendBodyWeight, ensureBodyWeightTab } from './utils/googleSheets';
 import GoogleSignIn from './components/GoogleSignIn';
 
 const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
@@ -35,13 +35,13 @@ function SyncBadge({ status }) {
 }
 
 // ─────────────── EXERCISE CARD ────────────────────────────────────────────────
-function ExerciseCard({ ex, isDone, onToggle, onLogWeight }) {
+function ExerciseCard({ ex, isDone, onToggle, onLogWeight, exerciseWeightLog, onDeleteWeight }) {
   const [expanded, setExpanded] = useState(false);
   const [imgUrl, setImgUrl]     = useState(null);
   const [imgLoading, setImgLoading] = useState(false);
   const [showLog, setShowLog]   = useState(false);
   const [kg, setKg]             = useState('');
-  const [reps, setReps]         = useState('');
+  const [reps, setReps]         = useState(String(ex.reps));
 
   const allDone = Array.from({ length: ex.sets }).every((_, si) => isDone(si));
 
@@ -65,10 +65,15 @@ function ExerciseCard({ ex, isDone, onToggle, onLogWeight }) {
     if (next && imgUrl === null) fetchImage();
   };
 
+  const today = new Date().toISOString().split('T')[0];
+  const todaySets = (exerciseWeightLog || []).filter(e => e.date === today);
+  const nextSetNum = todaySets.length + 1;
+
   const handleLog = () => {
     if (!kg) return;
-    onLogWeight({ exercise: ex.name, weight: parseFloat(kg), reps: reps || String(ex.reps), date: new Date().toISOString().split('T')[0], notes: '' });
-    setKg(''); setReps(''); setShowLog(false);
+    onLogWeight({ exercise: ex.name, weight: parseFloat(kg), reps: reps || String(ex.reps), date: today, notes: '' });
+    setKg('');
+    setReps(String(ex.reps));
   };
 
   return (
@@ -105,7 +110,19 @@ function ExerciseCard({ ex, isDone, onToggle, onLogWeight }) {
         {/* weight logger */}
         {showLog && (
           <div style={{ marginTop: 10, padding: '10px 12px', background: '#f8fafc', borderRadius: 10, border: '1px solid #e2e8f0' }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: '#475569', marginBottom: 8 }}>📊 Log this set</div>
+            <div style={{ fontSize: 12, fontWeight: 700, color: '#475569', marginBottom: 8 }}>📊 Sets logged today</div>
+            {todaySets.length > 0 && (
+              <div style={{ marginBottom: 10, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {todaySets.map((e, i) => (
+                  <div key={e.id ?? i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#fff', borderRadius: 8, padding: '6px 10px', border: '1px solid #e2e8f0' }}>
+                    <span style={{ fontSize: 12, color: '#475569' }}>Set {i + 1}</span>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: '#1d4ed8' }}>{e.weight}kg × {e.reps}</span>
+                    <button onClick={() => onDeleteWeight(e)} style={{ background: 'none', border: 'none', color: '#ef4444', fontSize: 16, cursor: 'pointer', padding: '0 4px', lineHeight: 1 }}>✕</button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 6 }}>Set {nextSetNum}</div>
             <div style={{ display: 'flex', gap: 8 }}>
               <input value={kg} onChange={e => setKg(e.target.value)} placeholder="kg" type="number" inputMode="decimal" style={{ flex: 1, padding: '7px 10px', borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 14 }} />
               <input value={reps} onChange={e => setReps(e.target.value)} placeholder="reps" type="number" inputMode="numeric" style={{ flex: 1, padding: '7px 10px', borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 14 }} />
@@ -525,11 +542,21 @@ export default function App() {
 
   // ── log weight ─────────────────────────────────────────────────────────────
   const handleLogWeight = async (entry) => {
-    saveWeightLocal(entry);
-    setWeightLog(w => [...w, entry]);
+    const withId = { ...entry, id: Date.now() };
+    saveWeightLocal(withId);
+    setWeightLog(w => [...w, withId]);
     if (accessToken && sheetId) {
-      try { await appendWeightEntry(accessToken, sheetId, entry); }
+      try { await appendWeightEntry(accessToken, sheetId, withId); }
       catch { /* already saved locally */ }
+    }
+  };
+
+  const handleDeleteWeight = async (entry) => {
+    deleteWeightLocal(entry.id);
+    setWeightLog(w => w.filter(e => e.id !== entry.id));
+    if (accessToken && sheetId) {
+      try { await deleteWeightEntry(accessToken, sheetId, entry); }
+      catch { /* removed locally */ }
     }
   };
 
@@ -678,6 +705,8 @@ export default function App() {
             isDone={si => isSetDone(activeMonth, activeWeek, activeDay, ei, si)}
             onToggle={si => toggleSet(activeMonth, activeWeek, activeDay, ei, si)}
             onLogWeight={handleLogWeight}
+            exerciseWeightLog={weightLog.filter(e => e.exercise === ex.name)}
+            onDeleteWeight={handleDeleteWeight}
           />
         ))}
 

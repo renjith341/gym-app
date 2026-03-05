@@ -174,6 +174,36 @@ export async function appendWeightEntry(token, sheetId, entry) {
   );
 }
 
+export async function deleteWeightEntry(token, sheetId, entry) {
+  // Find the row index in WeightLog by matching date, exercise, weight, reps
+  const data = await api(`${SHEETS_BASE}/${sheetId}/values/WeightLog!A:E`, token);
+  const rows = (data.values || []).slice(1); // skip header
+  const rowIndex = rows.findIndex(([date, exercise, weight, reps]) =>
+    date === entry.date &&
+    exercise === entry.exercise &&
+    parseFloat(weight) === parseFloat(entry.weight) &&
+    String(reps) === String(entry.reps)
+  );
+  if (rowIndex === -1) return; // not found, nothing to delete
+  // +1 for header row, +1 because sheet rows are 1-indexed
+  const sheetRowIndex = rowIndex + 1;
+  await api(`${SHEETS_BASE}/${sheetId}:batchUpdate`, token, {
+    method: 'POST',
+    body: JSON.stringify({
+      requests: [{
+        deleteDimension: {
+          range: {
+            sheetId: 1, // WeightLog tab sheetId
+            dimension: 'ROWS',
+            startIndex: sheetRowIndex,
+            endIndex: sheetRowIndex + 1,
+          },
+        },
+      }],
+    }),
+  });
+}
+
 export function getSheetUrl(sheetId) {
   return `https://docs.google.com/spreadsheets/d/${sheetId}`;
 }

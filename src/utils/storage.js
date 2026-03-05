@@ -34,6 +34,11 @@ export function saveWeightLocal(entry) {
   localStorage.setItem(WEIGHTS_KEY, JSON.stringify(log));
 }
 
+export function deleteWeightLocal(entryId) {
+  const log = loadWeightLogLocal().filter(e => e.id !== entryId);
+  localStorage.setItem(WEIGHTS_KEY, JSON.stringify(log));
+}
+
 // ─── profile ──────────────────────────────────────────────────────────────────
 const PROFILE_KEY = 'gymplan_profile';
 
