@@ -49,10 +49,11 @@ function ExerciseCard({ ex, isDone, onToggle, onLogWeight }) {
     if (imgUrl !== null || imgLoading) return;
     setImgLoading(true);
     try {
-      const slug = encodeURIComponent(ex.name.replace(/\s+/g, '_'));
-      const res  = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${slug}`);
+      const q = encodeURIComponent(ex.name + ' exercise');
+      const res = await fetch(`https://commons.wikimedia.org/w/api.php?action=query&prop=imageinfo&generator=search&gsrsearch=${q}&gsrnamespace=6&iiprop=url&iiurlwidth=400&format=json&origin=*`);
       const data = await res.json();
-      const url  = data.thumbnail?.source || data.originalimage?.source || null;
+      const pages = Object.values(data.query?.pages || {});
+      const url = pages[0]?.imageinfo?.[0]?.url || null;
       setImgUrl(url || 'none');
     } catch { setImgUrl('none'); }
     setImgLoading(false);
@@ -327,9 +328,28 @@ export default function App() {
 
   // ── bootstrap ──────────────────────────────────────────────────────────────
   useEffect(() => {
-    setProgress(loadProgress());
+    const prog = loadProgress();
+    setProgress(prog);
     setWeightLog(loadWeightLogLocal());
     setGenerated(loadGeneratedMonths());
+
+    // Navigate to last active session
+    const keys = Object.keys(prog);
+    if (keys.length > 0) {
+      let maxMonth = 0, maxWeek = 0, maxDay = 0;
+      keys.forEach(key => {
+        const m = key.match(/^m(\d+)-w(\d+)-d(\d+)/);
+        if (m) {
+          const mi = parseInt(m[1]) - 1, wi = parseInt(m[2]) - 1, di = parseInt(m[3]) - 1;
+          if (mi > maxMonth || (mi === maxMonth && wi > maxWeek) || (mi === maxMonth && wi === maxWeek && di > maxDay)) {
+            maxMonth = mi; maxWeek = wi; maxDay = di;
+          }
+        }
+      });
+      setActiveMonth(maxMonth);
+      setActiveWeek(maxWeek);
+      setActiveDay(maxDay);
+    }
 
     // Pre-load Google script so token client is ready
     if (CLIENT_ID) {
@@ -364,7 +384,12 @@ export default function App() {
       const merged = { ...loadProgress(), ...remoteProgress };
       setProgress(merged);
       saveProgressLocal(merged);
-      setWeightLog(remoteWeights.length > 0 ? remoteWeights : loadWeightLogLocal());
+      // Merge: keep local entries not yet in remote (unsynced writes)
+      const localWeights = loadWeightLogLocal();
+      const mergedWeights = remoteWeights.length > 0
+        ? [...remoteWeights, ...localWeights.filter(l => !remoteWeights.some(r => r.date === l.date && r.exercise === l.exercise && r.weight === l.weight))]
+        : localWeights;
+      setWeightLog(mergedWeights);
       setSyncStatus('synced');
     } catch (e) {
       console.error('Sheets init error:', e);
