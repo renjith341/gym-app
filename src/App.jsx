@@ -49,21 +49,11 @@ function ExerciseCard({ ex, isDone, onToggle, onLogWeight }) {
     if (imgUrl !== null || imgLoading) return;
     setImgLoading(true);
     try {
-      const res = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: 'claude-sonnet-4-20250514',
-          max_tokens: 200,
-          tools: [{ type: 'web_search_20250305', name: 'web_search' }],
-          system: 'Find a clear exercise demonstration photo URL. Return ONLY the direct image URL ending in .jpg .jpeg .png or .gif — nothing else. No markdown, no explanation.',
-          messages: [{ role: 'user', content: `Exercise photo for gym: ${ex.name}` }],
-        }),
-      });
+      const slug = encodeURIComponent(ex.name.replace(/\s+/g, '_'));
+      const res  = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${slug}`);
       const data = await res.json();
-      const text = data.content?.filter(b => b.type === 'text').map(b => b.text).join('') || '';
-      const m    = text.match(/https?:\/\/\S+\.(jpg|jpeg|png|gif)/i);
-      setImgUrl(m ? m[0] : 'none');
+      const url  = data.thumbnail?.source || data.originalimage?.source || null;
+      setImgUrl(url || 'none');
     } catch { setImgUrl('none'); }
     setImgLoading(false);
   }, [ex.name, imgUrl, imgLoading]);
@@ -137,8 +127,10 @@ function ExerciseCard({ ex, isDone, onToggle, onLogWeight }) {
             {!imgLoading && imgUrl && imgUrl !== 'none' && (
               <img src={imgUrl} alt={ex.name} onError={() => setImgUrl('none')} style={{ width: '100%', maxHeight: 220, objectFit: 'cover', display: 'block' }} />
             )}
-            {!imgLoading && (imgUrl === 'none' || !imgUrl) && imgUrl !== null && (
-              <div style={{ color: '#94a3b8', fontSize: 13, textAlign: 'center', padding: 20 }}>🏋️<br/>Search YouTube: "{ex.name}"</div>
+            {!imgLoading && imgUrl === 'none' && (
+              <a href={`https://www.youtube.com/results?search_query=${encodeURIComponent(ex.name + ' exercise form')}`} target="_blank" rel="noreferrer" style={{ color: '#1d4ed8', fontSize: 13, textAlign: 'center', padding: 20, textDecoration: 'none', display: 'block' }}>
+                ▶ Watch "{ex.name}" on YouTube
+              </a>
             )}
           </div>
           {ex.tip && (
