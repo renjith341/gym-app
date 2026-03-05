@@ -4,7 +4,7 @@ import { month2 } from './data/month2';
 import { loadProgress, saveProgressLocal, loadGeneratedMonths, saveGeneratedMonth, loadWeightLogLocal, saveWeightLocal, loadProfile, saveProfile, loadBodyWeightLocal, saveBodyWeightLocal } from './utils/storage';
 import { generateMonth } from './utils/generateMonth';
 import { getStoredUser, signOut, loadGoogleScript, initTokenClient, requestAccessToken } from './utils/googleAuth';
-import { findOrCreateSheet, readProgress, writeProgress, readWeightLog, appendWeightEntry, getSheetUrl, getCachedSheetId, readSettings, writeSettings, readBodyWeight, appendBodyWeight } from './utils/googleSheets';
+import { findOrCreateSheet, readProgress, writeProgress, readWeightLog, appendWeightEntry, getSheetUrl, getCachedSheetId, readSettings, writeSettings, readBodyWeight, appendBodyWeight, ensureBodyWeightTab } from './utils/googleSheets';
 import GoogleSignIn from './components/GoogleSignIn';
 
 const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
@@ -460,6 +460,7 @@ export default function App() {
     try {
       const sid = await findOrCreateSheet(token, profile.email);
       setSheetId(sid);
+      await ensureBodyWeightTab(token, sid);
       const [remoteProgress, remoteWeights, remoteSettings, remoteBodyWeight] = await Promise.all([
         readProgress(token, sid),
         readWeightLog(token, sid),

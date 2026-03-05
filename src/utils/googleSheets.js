@@ -205,6 +205,26 @@ export async function writeSettings(token, sheetId, settings) {
   await Promise.all(reqs);
 }
 
+// ─── ensure missing tabs exist (for sheets created before BodyWeight was added) ─
+
+export async function ensureBodyWeightTab(token, sheetId) {
+  try {
+    await api(`${SHEETS_BASE}/${sheetId}/values/BodyWeight!A1`, token);
+    // Tab exists — nothing to do
+  } catch {
+    // Tab missing — create it
+    await api(`${SHEETS_BASE}/${sheetId}:batchUpdate`, token, {
+      method: 'POST',
+      body: JSON.stringify({ requests: [{ addSheet: { properties: { title: 'BodyWeight' } } }] }),
+    });
+    // Write header
+    await api(`${SHEETS_BASE}/${sheetId}/values/BodyWeight!A1:C1?valueInputOption=RAW`, token, {
+      method: 'PUT',
+      body: JSON.stringify({ values: [['Date', 'Weight_kg', 'Notes']] }),
+    });
+  }
+}
+
 // ─── body weight log ──────────────────────────────────────────────────────────
 
 export async function readBodyWeight(token, sheetId) {
