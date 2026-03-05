@@ -26,6 +26,7 @@ export default function GoogleSignIn({ clientId, onSignedIn }) {
       saveUser({ name: profile.name, email: profile.email, picture: profile.picture });
       onSignedIn(token, profile);
     } catch (e) {
+      console.error('Sign-in error:', e);
       setError(typeof e === 'string' ? e : 'Sign-in cancelled or failed. Try again.');
     }
     setLoading(false);
