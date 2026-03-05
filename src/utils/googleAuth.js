@@ -48,7 +48,7 @@ export function requestAccessToken() {
     const token = sessionStorage.getItem(TOKEN_KEY);
     const exp   = parseInt(sessionStorage.getItem(TOKEN_EXP) || '0');
     if (token && Date.now() < exp) { resolve(token); return; }
-    tokenClient.requestToken();
+    tokenClient.requestAccessToken();
   });
 }
 
@@ -68,10 +68,10 @@ export function getStoredUser() {
 }
 
 export function signOut() {
+  const token = getStoredToken();
   localStorage.removeItem(USER_KEY);
   sessionStorage.removeItem(TOKEN_KEY);
   sessionStorage.removeItem(TOKEN_EXP);
-  const token = getStoredToken();
   if (token && window.google?.accounts?.oauth2) {
     window.google.accounts.oauth2.revoke(token);
   }
