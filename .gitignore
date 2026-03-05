@@ -1,0 +1,5 @@
+node_modules
+dist
+.env.local
+SETUP-AND-DEPLOY.md
+.DS_Store
