@@ -1,10 +1,10 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { month1 } from './data/month1';
 import { month2 } from './data/month2';
-import { loadProgress, saveProgressLocal, loadGeneratedMonths, saveGeneratedMonth, loadWeightLogLocal, saveWeightLocal } from './utils/storage';
+import { loadProgress, saveProgressLocal, loadGeneratedMonths, saveGeneratedMonth, loadWeightLogLocal, saveWeightLocal, loadProfile, saveProfile, loadBodyWeightLocal, saveBodyWeightLocal } from './utils/storage';
 import { generateMonth } from './utils/generateMonth';
 import { getStoredUser, signOut, loadGoogleScript, initTokenClient, requestAccessToken } from './utils/googleAuth';
-import { findOrCreateSheet, readProgress, writeProgress, readWeightLog, appendWeightEntry, getSheetUrl, getCachedSheetId } from './utils/googleSheets';
+import { findOrCreateSheet, readProgress, writeProgress, readWeightLog, appendWeightEntry, getSheetUrl, getCachedSheetId, readSettings, writeSettings, readBodyWeight, appendBodyWeight } from './utils/googleSheets';
 import GoogleSignIn from './components/GoogleSignIn';
 
 const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
@@ -217,7 +217,29 @@ function WeightLogScreen({ weightLog, onClose, sheetId }) {
 }
 
 // ─────────────── SETTINGS SCREEN ──────────────────────────────────────────────
-function SettingsScreen({ user, sheetId, onClose, onSignOut }) {
+function SettingsScreen({ user, sheetId, onClose, onSignOut, profile, onSaveProfile, bodyWeightLog, onLogBodyWeight }) {
+  const [age, setAge]           = useState(profile.age || '');
+  const [weightKg, setWeightKg] = useState(profile.weight_kg || '');
+  const [heightCm, setHeightCm] = useState(profile.height_cm || '');
+  const [saved, setSaved]       = useState(false);
+  const [bwKg, setBwKg]         = useState('');
+  const today = new Date().toISOString().split('T')[0];
+  const todayEntry = bodyWeightLog.find(e => e.date === today);
+
+  const handleSave = () => {
+    onSaveProfile({ age, weight_kg: weightKg, height_cm: heightCm });
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  };
+
+  const handleLogBw = () => {
+    if (!bwKg) return;
+    onLogBodyWeight({ date: today, weight_kg: parseFloat(bwKg), notes: '' });
+    setBwKg('');
+  };
+
+  const recentBw = [...bodyWeightLog].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 7);
+
   return (
     <div style={{ minHeight: '100vh', background: '#f1f5f9', fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}>
       <div style={{ background: 'linear-gradient(135deg, #1e293b, #334155)', color: '#fff', padding: '20px 16px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -226,7 +248,7 @@ function SettingsScreen({ user, sheetId, onClose, onSignOut }) {
       </div>
       <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
 
-        {/* Profile */}
+        {/* Google account */}
         <div style={{ background: '#fff', borderRadius: 16, padding: 16, boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             {user?.picture && <img src={user.picture} alt="" style={{ width: 48, height: 48, borderRadius: '50%', border: '2px solid #e2e8f0' }} />}
@@ -240,11 +262,54 @@ function SettingsScreen({ user, sheetId, onClose, onSignOut }) {
           </button>
         </div>
 
-        {/* Sheets */}
+        {/* Profile */}
+        <div style={{ background: '#fff', borderRadius: 16, padding: 16, boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
+          <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 12 }}>👤 My Profile</div>
+          <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+            {[['Age', age, setAge, 'number', 'yrs'], ['Weight', weightKg, setWeightKg, 'decimal', 'kg'], ['Height', heightCm, setHeightCm, 'decimal', 'cm']].map(([label, val, setter, mode, unit]) => (
+              <div key={label} style={{ flex: 1 }}>
+                <div style={{ fontSize: 11, color: '#64748b', marginBottom: 4 }}>{label} ({unit})</div>
+                <input value={val} onChange={e => setter(e.target.value)} type="number" inputMode={mode}
+                  style={{ width: '100%', padding: '8px', borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 14, boxSizing: 'border-box' }} />
+              </div>
+            ))}
+          </div>
+          <button onClick={handleSave} style={{ width: '100%', padding: '10px', background: saved ? '#f0fdf4' : '#1d4ed8', color: saved ? '#15803d' : '#fff', border: saved ? '1px solid #bbf7d0' : 'none', borderRadius: 10, fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>
+            {saved ? '✓ Saved' : 'Save Profile'}
+          </button>
+        </div>
+
+        {/* Body weight log */}
+        <div style={{ background: '#fff', borderRadius: 16, padding: 16, boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
+          <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 8 }}>⚖️ Body Weight</div>
+          {todayEntry && (
+            <div style={{ fontSize: 13, color: '#15803d', background: '#f0fdf4', borderRadius: 8, padding: '6px 10px', marginBottom: 10 }}>
+              Today: {todayEntry.weight_kg} kg
+            </div>
+          )}
+          <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+            <input value={bwKg} onChange={e => setBwKg(e.target.value)} type="number" inputMode="decimal" placeholder="Today's weight (kg)"
+              style={{ flex: 1, padding: '8px 10px', borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 14 }} />
+            <button onClick={handleLogBw} style={{ padding: '8px 16px', background: '#1d4ed8', color: '#fff', borderRadius: 8, border: 'none', fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>Log</button>
+          </div>
+          {recentBw.length > 0 && (
+            <div>
+              <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 6 }}>Last 7 entries</div>
+              {recentBw.map(e => (
+                <div key={e.date} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#475569', padding: '5px 0', borderBottom: '1px solid #f1f5f9' }}>
+                  <span>{e.date}</span>
+                  <span style={{ fontWeight: 700, color: '#1d4ed8' }}>{e.weight_kg} kg</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Google Sheet */}
         <div style={{ background: '#fff', borderRadius: 16, padding: 16, boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
           <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 8 }}>📊 Google Sheet</div>
           <div style={{ fontSize: 13, color: '#64748b', marginBottom: 12, lineHeight: 1.6 }}>
-            Your progress is automatically saved to your own Google Sheet in Drive. Only your Google account can access it.
+            Progress, weights, and body weight sync to your private Google Sheet.
           </div>
           {sheetId ? (
             <a href={getSheetUrl(sheetId)} target="_blank" rel="noreferrer" style={{ display: 'block', textAlign: 'center', padding: '10px', background: '#f0fdf4', color: '#15803d', border: '1px solid #bbf7d0', borderRadius: 10, fontWeight: 700, fontSize: 14, textDecoration: 'none' }}>
@@ -254,24 +319,38 @@ function SettingsScreen({ user, sheetId, onClose, onSignOut }) {
             <div style={{ color: '#94a3b8', fontSize: 13 }}>Sheet will be created on first sync.</div>
           )}
         </div>
-
-        {/* About */}
-        <div style={{ background: '#fff', borderRadius: 16, padding: 16, boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
-          <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 8 }}>ℹ️ About</div>
-          <div style={{ fontSize: 13, color: '#64748b', lineHeight: 1.7 }}>
-            <div>👤 Male, 38 · 174.5cm · 87kg</div>
-            <div>🎯 Fat loss + muscle + fitness</div>
-            <div>📅 6-month progressive plan</div>
-            <div>🤖 Months 3–6 AI-generated on demand</div>
-          </div>
-        </div>
       </div>
     </div>
   );
 }
 
+// ─────────────── DAILY BODY WEIGHT ────────────────────────────────────────────
+function DailyBodyWeight({ today, bodyWeightLog, onLog }) {
+  const [kg, setKg] = useState('');
+  const todayEntry = bodyWeightLog.find(e => e.date === today);
+
+  const handleLog = () => {
+    if (!kg) return;
+    onLog({ date: today, weight_kg: parseFloat(kg), notes: '' });
+    setKg('');
+  };
+
+  return (
+    <div style={{ background: '#fff', borderRadius: 14, padding: '10px 14px', marginBottom: 8, boxShadow: '0 1px 4px rgba(0,0,0,0.06)', display: 'flex', alignItems: 'center', gap: 10 }}>
+      <span style={{ fontSize: 18 }}>⚖️</span>
+      <div style={{ flex: 1 }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: '#475569' }}>Today's body weight</div>
+        {todayEntry && <div style={{ fontSize: 11, color: '#15803d' }}>Logged: {todayEntry.weight_kg} kg</div>}
+      </div>
+      <input value={kg} onChange={e => setKg(e.target.value)} type="number" inputMode="decimal" placeholder="kg"
+        style={{ width: 64, padding: '6px 8px', borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 14 }} />
+      <button onClick={handleLog} style={{ padding: '6px 12px', background: '#1d4ed8', color: '#fff', borderRadius: 8, border: 'none', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>Log</button>
+    </div>
+  );
+}
+
 // ─────────────── HEADER ───────────────────────────────────────────────────────
-function AppHeader({ user, g1, g2, activeMonth, setActiveMonth, onSettings, onWeights, monthPct, syncStatus }) {
+function AppHeader({ user, profile, g1, g2, activeMonth, setActiveMonth, onSettings, onWeights, monthPct, syncStatus }) {
   const labels = ['M1','M2','M3','M4','M5','M6'];
   const themes = ['Re-Activation','Strength','PPL','Advanced','5/3/1','Peak'];
   return (
@@ -280,7 +359,9 @@ function AppHeader({ user, g1, g2, activeMonth, setActiveMonth, onSettings, onWe
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
             <div style={{ fontSize: 19, fontWeight: 800 }}>💪 6-Month Gym Plan</div>
-            <div style={{ fontSize: 11, opacity: 0.8, marginTop: 1 }}>Male · 38 · 174.5cm · 87kg</div>
+            <div style={{ fontSize: 11, opacity: 0.8, marginTop: 1 }}>
+              {[profile.age && `${profile.age}y`, profile.height_cm && `${profile.height_cm}cm`, profile.weight_kg && `${profile.weight_kg}kg`].filter(Boolean).join(' · ') || 'Set profile in ⚙️'}
+            </div>
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             {user?.picture && <img src={user.picture} alt="" onClick={onSettings} style={{ width: 32, height: 32, borderRadius: '50%', border: '2px solid rgba(255,255,255,0.5)', cursor: 'pointer' }} />}
@@ -319,6 +400,8 @@ export default function App() {
   const [syncStatus, setSyncStatus]   = useState('offline');
   const [progress, setProgress]       = useState({});
   const [weightLog, setWeightLog]     = useState([]);
+  const [bodyWeightLog, setBodyWeightLog] = useState([]);
+  const [profile, setProfile]         = useState(loadProfile() || { age: '', weight_kg: '', height_cm: '' });
   const [generatedMonths, setGenerated] = useState({});
   const [activeMonth, setActiveMonth] = useState(0);
   const [activeWeek, setActiveWeek]   = useState(0);
@@ -331,6 +414,7 @@ export default function App() {
     const prog = loadProgress();
     setProgress(prog);
     setWeightLog(loadWeightLogLocal());
+    setBodyWeightLog(loadBodyWeightLocal());
     setGenerated(loadGeneratedMonths());
 
     // Navigate to last active session
@@ -376,20 +460,34 @@ export default function App() {
     try {
       const sid = await findOrCreateSheet(token, profile.email);
       setSheetId(sid);
-      const [remoteProgress, remoteWeights] = await Promise.all([
+      const [remoteProgress, remoteWeights, remoteSettings, remoteBodyWeight] = await Promise.all([
         readProgress(token, sid),
         readWeightLog(token, sid),
+        readSettings(token, sid),
+        readBodyWeight(token, sid),
       ]);
-      // Merge local + remote (remote wins on conflicts)
+      // Merge progress
       const merged = { ...loadProgress(), ...remoteProgress };
       setProgress(merged);
       saveProgressLocal(merged);
-      // Merge: keep local entries not yet in remote (unsynced writes)
+      // Merge exercise weight log
       const localWeights = loadWeightLogLocal();
       const mergedWeights = remoteWeights.length > 0
         ? [...remoteWeights, ...localWeights.filter(l => !remoteWeights.some(r => r.date === l.date && r.exercise === l.exercise && r.weight === l.weight))]
         : localWeights;
       setWeightLog(mergedWeights);
+      // Load profile from settings sheet
+      if (remoteSettings.profile_age !== undefined) {
+        const remoteProfile = { age: remoteSettings.profile_age, weight_kg: remoteSettings.profile_weight_kg, height_cm: remoteSettings.profile_height_cm };
+        setProfile(remoteProfile);
+        saveProfile(remoteProfile);
+      }
+      // Merge body weight log
+      const localBodyWeight = loadBodyWeightLocal();
+      const mergedBodyWeight = remoteBodyWeight.length > 0
+        ? [...remoteBodyWeight, ...localBodyWeight.filter(l => !remoteBodyWeight.some(r => r.date === l.date))]
+        : localBodyWeight;
+      setBodyWeightLog(mergedBodyWeight);
       setSyncStatus('synced');
     } catch (e) {
       console.error('Sheets init error:', e);
@@ -434,6 +532,30 @@ export default function App() {
     }
   };
 
+  // ── profile ────────────────────────────────────────────────────────────────
+  const handleSaveProfile = async (newProfile) => {
+    setProfile(newProfile);
+    saveProfile(newProfile);
+    if (accessToken && sheetId) {
+      try { await writeSettings(accessToken, sheetId, { profile_age: newProfile.age, profile_weight_kg: newProfile.weight_kg, profile_height_cm: newProfile.height_cm }); }
+      catch { /* saved locally */ }
+    }
+  };
+
+  // ── body weight ────────────────────────────────────────────────────────────
+  const handleLogBodyWeight = async (entry) => {
+    saveBodyWeightLocal(entry);
+    setBodyWeightLog(prev => {
+      const idx = prev.findIndex(e => e.date === entry.date);
+      if (idx >= 0) { const next = [...prev]; next[idx] = entry; return next; }
+      return [...prev, entry];
+    });
+    if (accessToken && sheetId) {
+      try { await appendBodyWeight(accessToken, sheetId, entry); }
+      catch { /* saved locally */ }
+    }
+  };
+
   // ── sign out ───────────────────────────────────────────────────────────────
   const handleSignOut = () => {
     signOut();
@@ -465,13 +587,13 @@ export default function App() {
   const [g1, g2] = MONTH_GRADS[activeMonth + 1];
   const currentMonth = months[activeMonth];
 
-  if (screen === 'settings') return <SettingsScreen user={user} sheetId={sheetId} onClose={() => setScreen('workout')} onSignOut={handleSignOut} />;
+  if (screen === 'settings') return <SettingsScreen user={user} sheetId={sheetId} onClose={() => setScreen('workout')} onSignOut={handleSignOut} profile={profile} onSaveProfile={handleSaveProfile} bodyWeightLog={bodyWeightLog} onLogBodyWeight={handleLogBodyWeight} />;
   if (screen === 'weights')  return <WeightLogScreen weightLog={weightLog} onClose={() => setScreen('workout')} sheetId={sheetId} />;
 
   if (!currentMonth) {
     return (
       <div style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", background: '#f1f5f9', minHeight: '100vh', maxWidth: 480, margin: '0 auto' }}>
-        <AppHeader user={user} g1={g1} g2={g2} activeMonth={activeMonth} setActiveMonth={i => { setActiveMonth(i); setActiveWeek(0); setActiveDay(0); }} onSettings={() => setScreen('settings')} onWeights={() => setScreen('weights')} syncStatus={syncStatus} />
+        <AppHeader user={user} profile={profile} g1={g1} g2={g2} activeMonth={activeMonth} setActiveMonth={i => { setActiveMonth(i); setActiveWeek(0); setActiveDay(0); }} onSettings={() => setScreen('settings')} onWeights={() => setScreen('weights')} syncStatus={syncStatus} />
         <MonthGenerator monthId={activeMonth + 1} previousMonths={months.filter(Boolean).slice(0, activeMonth)} onGenerated={handleMonthGenerated} g1={g1} g2={g2} />
       </div>
     );
@@ -491,7 +613,7 @@ export default function App() {
     <div style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", background: '#f1f5f9', minHeight: '100vh', maxWidth: 480, margin: '0 auto' }}>
       <style>{`@keyframes spin { to { transform: rotate(360deg); } } * { -webkit-tap-highlight-color: transparent; box-sizing: border-box; }`}</style>
 
-      <AppHeader user={user} g1={g1} g2={g2} activeMonth={activeMonth}
+      <AppHeader user={user} profile={profile} g1={g1} g2={g2} activeMonth={activeMonth}
         setActiveMonth={i => { setActiveMonth(i); setActiveWeek(0); setActiveDay(0); }}
         onSettings={() => setScreen('settings')} onWeights={() => setScreen('weights')}
         monthPct={monthPct} syncStatus={syncStatus}
@@ -543,6 +665,9 @@ export default function App() {
             <div style={{ background: `linear-gradient(90deg, ${g1}, ${g2})`, width: `${pct}%`, height: 6, borderRadius: 99, transition: 'width 0.4s' }} />
           </div>
         </div>
+
+        {/* daily body weight */}
+        <DailyBodyWeight today={new Date().toISOString().split('T')[0]} bodyWeightLog={bodyWeightLog} onLog={handleLogBodyWeight} />
 
         {/* exercises */}
         {day.exercises.map((ex, ei) => (

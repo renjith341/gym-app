@@ -33,3 +33,30 @@ export function saveWeightLocal(entry) {
   log.push({ ...entry, id: Date.now() });
   localStorage.setItem(WEIGHTS_KEY, JSON.stringify(log));
 }
+
+// ─── profile ──────────────────────────────────────────────────────────────────
+const PROFILE_KEY = 'gymplan_profile';
+
+export function loadProfile() {
+  try { return JSON.parse(localStorage.getItem(PROFILE_KEY) || 'null'); }
+  catch { return null; }
+}
+
+export function saveProfile(profile) {
+  localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
+}
+
+// ─── body weight log ──────────────────────────────────────────────────────────
+const BODY_WEIGHT_KEY = 'gymplan_body_weight';
+
+export function loadBodyWeightLocal() {
+  try { return JSON.parse(localStorage.getItem(BODY_WEIGHT_KEY) || '[]'); }
+  catch { return []; }
+}
+
+export function saveBodyWeightLocal(entry) {
+  const log = loadBodyWeightLocal();
+  const idx = log.findIndex(e => e.date === entry.date);
+  if (idx >= 0) log[idx] = entry; else log.push(entry);
+  localStorage.setItem(BODY_WEIGHT_KEY, JSON.stringify(log));
+}

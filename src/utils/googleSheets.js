@@ -63,6 +63,7 @@ export async function findOrCreateSheet(token, userEmail) {
         { properties: { title: 'Progress',   sheetId: 0 } },
         { properties: { title: 'WeightLog',  sheetId: 1 } },
         { properties: { title: 'Settings',   sheetId: 2 } },
+        { properties: { title: 'BodyWeight', sheetId: 3 } },
       ],
     }),
   });
@@ -75,9 +76,10 @@ export async function findOrCreateSheet(token, userEmail) {
     body: JSON.stringify({
       valueInputOption: 'RAW',
       data: [
-        { range: 'Progress!A1:C1',  values: [['Key','Completed','Timestamp']] },
-        { range: 'WeightLog!A1:E1', values: [['Date','Exercise','Weight_kg','Reps','Notes']] },
-        { range: 'Settings!A1:B1', values: [['Key','Value']] },
+        { range: 'Progress!A1:C1',    values: [['Key','Completed','Timestamp']] },
+        { range: 'WeightLog!A1:E1',   values: [['Date','Exercise','Weight_kg','Reps','Notes']] },
+        { range: 'Settings!A1:B1',    values: [['Key','Value']] },
+        { range: 'BodyWeight!A1:C1',  values: [['Date','Weight_kg','Notes']] },
       ],
     }),
   });
@@ -174,4 +176,50 @@ export async function appendWeightEntry(token, sheetId, entry) {
 
 export function getSheetUrl(sheetId) {
   return `https://docs.google.com/spreadsheets/d/${sheetId}`;
+}
+
+// ─── settings (profile) ───────────────────────────────────────────────────────
+
+export async function readSettings(token, sheetId) {
+  try {
+    const data = await api(`${SHEETS_BASE}/${sheetId}/values/Settings!A:B`, token);
+    const settings = {};
+    (data.values || []).slice(1).forEach(([key, value]) => { if (key) settings[key] = value; });
+    return settings;
+  } catch { return {}; }
+}
+
+export async function writeSettings(token, sheetId, settings) {
+  const data = await api(`${SHEETS_BASE}/${sheetId}/values/Settings!A:A`, token);
+  const existingKeys = (data.values || []).slice(1).map(r => r[0]);
+
+  const newRows = Object.entries(settings).filter(([k]) => !existingKeys.includes(k)).map(([k, v]) => [k, String(v)]);
+  const updates = Object.entries(settings).map(([k, v]) => {
+    const row = existingKeys.indexOf(k);
+    return row === -1 ? null : { range: `Settings!B${row + 2}`, values: [[String(v)]] };
+  }).filter(Boolean);
+
+  const reqs = [];
+  if (newRows.length > 0) reqs.push(api(`${SHEETS_BASE}/${sheetId}/values/Settings!A:B:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`, token, { method: 'POST', body: JSON.stringify({ values: newRows }) }));
+  if (updates.length > 0) reqs.push(api(`${SHEETS_BASE}/${sheetId}/values:batchUpdate`, token, { method: 'POST', body: JSON.stringify({ valueInputOption: 'RAW', data: updates }) }));
+  await Promise.all(reqs);
+}
+
+// ─── body weight log ──────────────────────────────────────────────────────────
+
+export async function readBodyWeight(token, sheetId) {
+  try {
+    const data = await api(`${SHEETS_BASE}/${sheetId}/values/BodyWeight!A:C`, token);
+    return (data.values || []).slice(1).map(([date, weight_kg, notes]) => ({
+      date, weight_kg: parseFloat(weight_kg), notes: notes || '',
+    }));
+  } catch { return []; }
+}
+
+export async function appendBodyWeight(token, sheetId, entry) {
+  await api(
+    `${SHEETS_BASE}/${sheetId}/values/BodyWeight!A:C:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`,
+    token,
+    { method: 'POST', body: JSON.stringify({ values: [[entry.date, entry.weight_kg, entry.notes || '']] }) }
+  );
 }
