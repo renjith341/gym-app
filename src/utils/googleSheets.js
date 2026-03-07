@@ -64,6 +64,7 @@ export async function findOrCreateSheet(token, userEmail) {
         { properties: { title: 'WeightLog',  sheetId: 1 } },
         { properties: { title: 'Settings',   sheetId: 2 } },
         { properties: { title: 'BodyWeight', sheetId: 3 } },
+        { properties: { title: 'Plan',       sheetId: 4 } },
       ],
     }),
   });
@@ -80,6 +81,7 @@ export async function findOrCreateSheet(token, userEmail) {
         { range: 'WeightLog!A1:E1',   values: [['Date','Exercise','Weight_kg','Reps','Notes']] },
         { range: 'Settings!A1:B1',    values: [['Key','Value']] },
         { range: 'BodyWeight!A1:C1',  values: [['Date','Weight_kg','Notes']] },
+        { range: 'Plan!A1:D1',        values: [['Month','Theme','Generated','PlanJSON']] },
       ],
     }),
   });
@@ -272,4 +274,67 @@ export async function appendBodyWeight(token, sheetId, entry) {
     token,
     { method: 'POST', body: JSON.stringify({ values: [[entry.date, entry.weight_kg, entry.notes || '']] }) }
   );
+}
+
+// ─── plan tab ─────────────────────────────────────────────────────────────────
+
+export async function ensurePlanTab(token, sheetId) {
+  try {
+    await api(`${SHEETS_BASE}/${sheetId}/values/Plan!A1`, token);
+    // Tab exists — nothing to do
+  } catch {
+    // Tab missing — create it (backward compat for sheets created before Plan tab)
+    await api(`${SHEETS_BASE}/${sheetId}:batchUpdate`, token, {
+      method: 'POST',
+      body: JSON.stringify({ requests: [{ addSheet: { properties: { title: 'Plan' } } }] }),
+    });
+    await api(`${SHEETS_BASE}/${sheetId}/values/Plan!A1:D1?valueInputOption=RAW`, token, {
+      method: 'PUT',
+      body: JSON.stringify({ values: [['Month', 'Theme', 'Generated', 'PlanJSON']] }),
+    });
+  }
+}
+
+export async function readPlan(token, sheetId) {
+  try {
+    const data = await api(`${SHEETS_BASE}/${sheetId}/values/Plan!A:D`, token);
+    const rows = (data.values || []).slice(1);
+    const result = {};
+    rows.forEach(([month, , , planJson]) => {
+      if (!month || !planJson) return;
+      try { result[Number(month)] = JSON.parse(planJson); } catch {}
+    });
+    return result;
+  } catch { return {}; }
+}
+
+export async function writePlanMonth(token, sheetId, monthObj) {
+  const data = await api(`${SHEETS_BASE}/${sheetId}/values/Plan!A:A`, token);
+  const rows = (data.values || []).slice(1);
+  const rowIndex = rows.findIndex(([month]) => Number(month) === monthObj.id);
+  const today = new Date().toISOString().split('T')[0];
+  const rowValues = [[monthObj.id, monthObj.theme || '', today, JSON.stringify(monthObj)]];
+
+  if (rowIndex === -1) {
+    await api(`${SHEETS_BASE}/${sheetId}/values/Plan!A:D:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`, token, {
+      method: 'POST',
+      body: JSON.stringify({ values: rowValues }),
+    });
+  } else {
+    const sheetRow = rowIndex + 2;
+    await api(`${SHEETS_BASE}/${sheetId}/values/Plan!A${sheetRow}:D${sheetRow}?valueInputOption=RAW`, token, {
+      method: 'PUT',
+      body: JSON.stringify({ values: rowValues }),
+    });
+  }
+}
+
+export async function writePlanBatch(token, sheetId, monthsArray) {
+  const today = new Date().toISOString().split('T')[0];
+  const values = monthsArray.map(m => [m.id, m.theme || '', today, JSON.stringify(m)]);
+  const endRow = monthsArray.length + 1;
+  await api(`${SHEETS_BASE}/${sheetId}/values/Plan!A2:D${endRow}?valueInputOption=RAW`, token, {
+    method: 'PUT',
+    body: JSON.stringify({ values }),
+  });
 }

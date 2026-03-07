@@ -1,11 +1,13 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { month1 } from './data/month1';
-import { month2 } from './data/month2';
-import { loadProgress, saveProgressLocal, loadGeneratedMonths, saveGeneratedMonth, loadWeightLogLocal, saveWeightLocal, deleteWeightLocal, loadProfile, saveProfile, loadBodyWeightLocal, saveBodyWeightLocal } from './utils/storage';
-import { generateMonth } from './utils/generateMonth';
+import { beginnerPlan } from './data/plans/beginner';
+import { intermediatePlan } from './data/plans/intermediate';
+import { proPlan } from './data/plans/pro';
+import { loadProgress, saveProgressLocal, loadWeightLogLocal, saveWeightLocal, deleteWeightLocal, loadProfile, saveProfile, loadBodyWeightLocal, saveBodyWeightLocal } from './utils/storage';
 import { getStoredUser, signOut, loadGoogleScript, initTokenClient, requestAccessToken } from './utils/googleAuth';
-import { findOrCreateSheet, readProgress, writeProgress, readWeightLog, appendWeightEntry, deleteWeightEntry, getSheetUrl, getCachedSheetId, readSettings, writeSettings, readBodyWeight, appendBodyWeight, ensureBodyWeightTab } from './utils/googleSheets';
+import { findOrCreateSheet, readProgress, writeProgress, readWeightLog, appendWeightEntry, deleteWeightEntry, getSheetUrl, getCachedSheetId, readSettings, writeSettings, readBodyWeight, appendBodyWeight, ensureBodyWeightTab, ensurePlanTab, readPlan, writePlanMonth, writePlanBatch } from './utils/googleSheets';
 import GoogleSignIn from './components/GoogleSignIn';
+
+const PLAN_KEY = 'gymplan_plan';
 
 const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
 
@@ -162,33 +164,38 @@ function ExerciseCard({ ex, isDone, onToggle, onLogWeight, exerciseWeightLog, on
   );
 }
 
-// ─────────────── MONTH GENERATOR ──────────────────────────────────────────────
-function MonthGenerator({ monthId, previousMonths, onGenerated, g1, g2 }) {
-  const [loading, setLoading] = useState(false);
-  const [error, setError]     = useState('');
-
-  const handle = async () => {
-    setLoading(true); setError('');
-    try {
-      const data = await generateMonth(monthId, previousMonths);
-      saveGeneratedMonth(monthId, data);
-      onGenerated(data);
-    } catch (e) { setError(e.message); }
-    setLoading(false);
-  };
-
+// ─────────────── ONBOARDING SCREEN ───────────────────────────────────────────
+function OnboardingScreen({ onSelect }) {
+  const [loading, setLoading] = useState('');
+  const levels = [
+    { key: 'beginner',     icon: '🌱', label: 'Beginner',     sub: '3 days/week · Full Body',       desc: 'Best if new to structured gym' },
+    { key: 'intermediate', icon: '⚡', label: 'Intermediate', sub: '4 days/week · Upper / Lower',    desc: '1–2 years experience' },
+    { key: 'pro',          icon: '🔥', label: 'Pro',          sub: '5-6 days/week · PPL + 5/3/1',   desc: 'Advanced compound-focused' },
+  ];
+  const handleSelect = (key) => { setLoading(key); onSelect(key); };
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: 400, padding: 32, textAlign: 'center' }}>
-      <div style={{ fontSize: 48, marginBottom: 16 }}>🤖</div>
-      <h2 style={{ fontSize: 22, fontWeight: 800, color: '#1e293b', margin: '0 0 8px' }}>Month {monthId} Not Generated Yet</h2>
-      <p style={{ color: '#64748b', fontSize: 14, margin: '0 0 24px', maxWidth: 280, lineHeight: 1.6 }}>
-        AI will build your Month {monthId} plan based on your previous {monthId - 1} months of training.
-      </p>
-      {error && <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 10, padding: '10px 14px', fontSize: 13, color: '#dc2626', marginBottom: 16, width: '100%', maxWidth: 300 }}>{error}</div>}
-      <button onClick={handle} disabled={loading} style={{ background: loading ? '#94a3b8' : `linear-gradient(135deg, ${g1}, ${g2})`, color: '#fff', border: 'none', borderRadius: 16, padding: '14px 32px', fontSize: 16, fontWeight: 800, cursor: loading ? 'not-allowed' : 'pointer', width: '100%', maxWidth: 300 }}>
-        {loading ? `⏳ Generating Month ${monthId}…` : `✨ Generate Month ${monthId}`}
-      </button>
-      {loading && <p style={{ color: '#64748b', fontSize: 13, marginTop: 12 }}>This takes 15–30 seconds…</p>}
+    <div style={{ minHeight: '100vh', background: '#f1f5f9', fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}>
+      <div style={{ background: 'linear-gradient(135deg, #1d4ed8, #6d28d9)', color: '#fff', padding: '32px 16px 24px', textAlign: 'center' }}>
+        <div style={{ fontSize: 48, marginBottom: 8 }}>💪</div>
+        <h1 style={{ margin: 0, fontSize: 24, fontWeight: 800 }}>Choose Your Training Level</h1>
+        <p style={{ margin: '8px 0 0', opacity: 0.8, fontSize: 14 }}>Your 6-month plan will be saved to your Google Sheet</p>
+      </div>
+      <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {levels.map(l => (
+          <button key={l.key} onClick={() => handleSelect(l.key)} disabled={!!loading}
+            style={{ display: 'flex', alignItems: 'center', gap: 16, background: '#fff', border: loading === l.key ? '2px solid #1d4ed8' : '1px solid #e2e8f0', borderRadius: 16, padding: '16px 18px', cursor: loading ? 'not-allowed' : 'pointer', textAlign: 'left', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', opacity: loading && loading !== l.key ? 0.5 : 1 }}>
+            <span style={{ fontSize: 36, flexShrink: 0 }}>{loading === l.key ? '⏳' : l.icon}</span>
+            <div>
+              <div style={{ fontWeight: 800, fontSize: 18, color: '#1e293b' }}>{l.label}</div>
+              <div style={{ fontSize: 13, color: '#475569', marginTop: 2 }}>{l.sub}</div>
+              <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 2 }}>{l.desc}</div>
+            </div>
+          </button>
+        ))}
+        <p style={{ textAlign: 'center', fontSize: 12, color: '#94a3b8', margin: '8px 0 0' }}>
+          Your plan is saved to your Google Sheet — edit it anytime
+        </p>
+      </div>
     </div>
   );
 }
@@ -234,12 +241,14 @@ function WeightLogScreen({ weightLog, onClose, sheetId }) {
 }
 
 // ─────────────── SETTINGS SCREEN ──────────────────────────────────────────────
-function SettingsScreen({ user, sheetId, onClose, onSignOut, profile, onSaveProfile, bodyWeightLog, onLogBodyWeight }) {
+function SettingsScreen({ user, sheetId, onClose, onSignOut, profile, onSaveProfile, bodyWeightLog, onLogBodyWeight, onExport, onImportPlan }) {
   const [age, setAge]           = useState(profile.age || '');
   const [weightKg, setWeightKg] = useState(profile.weight_kg || '');
   const [heightCm, setHeightCm] = useState(profile.height_cm || '');
   const [saved, setSaved]       = useState(false);
   const [bwKg, setBwKg]         = useState('');
+  const [importError, setImportError]     = useState('');
+  const [importSuccess, setImportSuccess] = useState(false);
   const today = new Date().toISOString().split('T')[0];
   const todayEntry = bodyWeightLog.find(e => e.date === today);
 
@@ -253,6 +262,17 @@ function SettingsScreen({ user, sheetId, onClose, onSignOut, profile, onSaveProf
     if (!bwKg) return;
     onLogBodyWeight({ date: today, weight_kg: parseFloat(bwKg), notes: '' });
     setBwKg('');
+  };
+
+  const handleImportFile = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImportError('');
+    setImportSuccess(false);
+    const err = await onImportPlan(file);
+    if (err) setImportError(err);
+    else setImportSuccess(true);
+    e.target.value = '';
   };
 
   const recentBw = [...bodyWeightLog].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 7);
@@ -322,6 +342,23 @@ function SettingsScreen({ user, sheetId, onClose, onSignOut, profile, onSaveProf
           )}
         </div>
 
+        {/* My Plan */}
+        <div style={{ background: '#fff', borderRadius: 16, padding: 16, boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
+          <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 12 }}>📋 My Plan</div>
+          <button onClick={onExport} style={{ width: '100%', padding: '10px', background: '#1d4ed8', color: '#fff', border: 'none', borderRadius: 10, fontWeight: 700, fontSize: 14, cursor: 'pointer', marginBottom: 8 }}>
+            📤 Export Progress + Next Month Prompt
+          </button>
+          <div style={{ fontSize: 12, color: '#64748b', marginBottom: 10, lineHeight: 1.5 }}>
+            Download your history and a prompt to generate the next month with any AI tool (Claude, ChatGPT, etc.).
+          </div>
+          <label style={{ display: 'block', width: '100%', padding: '10px', background: '#f0fdf4', color: '#15803d', border: '1px solid #bbf7d0', borderRadius: 10, fontWeight: 700, fontSize: 14, cursor: 'pointer', textAlign: 'center', boxSizing: 'border-box' }}>
+            📥 Import Plan Month
+            <input type="file" accept=".json" onChange={handleImportFile} style={{ display: 'none' }} />
+          </label>
+          {importError   && <div style={{ color: '#dc2626', fontSize: 13, marginTop: 6 }}>{importError}</div>}
+          {importSuccess && <div style={{ color: '#15803d', fontSize: 13, marginTop: 6 }}>✓ Plan month imported successfully!</div>}
+        </div>
+
         {/* Google Sheet */}
         <div style={{ background: '#fff', borderRadius: 16, padding: 16, boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
           <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 8 }}>📊 Google Sheet</div>
@@ -367,15 +404,13 @@ function DailyBodyWeight({ today, bodyWeightLog, onLog }) {
 }
 
 // ─────────────── HEADER ───────────────────────────────────────────────────────
-function AppHeader({ user, profile, g1, g2, activeMonth, setActiveMonth, onSettings, onWeights, monthPct, syncStatus }) {
-  const labels = ['M1','M2','M3','M4','M5','M6'];
-  const themes = ['Re-Activation','Strength','PPL','Advanced','5/3/1','Peak'];
+function AppHeader({ user, profile, g1, g2, activeMonth, setActiveMonth, onSettings, onWeights, monthPct, syncStatus, months }) {
   return (
     <>
       <div style={{ background: `linear-gradient(135deg, ${g1}, ${g2})`, color: '#fff', padding: '14px 16px 10px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
-            <div style={{ fontSize: 19, fontWeight: 800 }}>💪 6-Month Gym Plan</div>
+            <div style={{ fontSize: 19, fontWeight: 800 }}>💪 Gym Training Plan</div>
             <div style={{ fontSize: 11, opacity: 0.8, marginTop: 1 }}>
               {[profile.age && `${profile.age}y`, profile.height_cm && `${profile.height_cm}cm`, profile.weight_kg && `${profile.weight_kg}kg`].filter(Boolean).join(' · ') || 'Set profile in ⚙️'}
             </div>
@@ -399,9 +434,9 @@ function AppHeader({ user, profile, g1, g2, activeMonth, setActiveMonth, onSetti
         )}
       </div>
       <div style={{ background: '#1e293b', display: 'flex', overflowX: 'auto' }}>
-        {labels.map((m, i) => (
-          <button key={i} onClick={() => setActiveMonth(i)} style={{ flexShrink: 0, flex: 1, minWidth: 52, padding: '8px 4px', background: 'none', border: 'none', borderBottom: activeMonth === i ? '3px solid #fff' : '3px solid transparent', color: activeMonth === i ? '#fff' : '#64748b', fontWeight: activeMonth === i ? 700 : 400, fontSize: 12, cursor: 'pointer', lineHeight: 1.3 }}>
-            {m}<br /><span style={{ fontSize: 9, opacity: 0.7 }}>{themes[i]}</span>
+        {months.map((m, i) => (
+          <button key={i} onClick={() => setActiveMonth(i)} style={{ flexShrink: 0, flex: 1, minWidth: 52, padding: '8px 4px', background: 'none', border: 'none', borderBottom: activeMonth === i ? '3px solid #fff' : '3px solid transparent', color: m ? (activeMonth === i ? '#fff' : '#64748b') : '#334155', fontWeight: activeMonth === i ? 700 : 400, fontSize: 12, cursor: m ? 'pointer' : 'default', lineHeight: 1.3 }}>
+            M{i + 1}<br /><span style={{ fontSize: 9, opacity: 0.7 }}>{m ? (m.theme || '').split(' ')[0] : '—'}</span>
           </button>
         ))}
       </div>
@@ -419,12 +454,26 @@ export default function App() {
   const [weightLog, setWeightLog]     = useState([]);
   const [bodyWeightLog, setBodyWeightLog] = useState([]);
   const [profile, setProfile]         = useState(loadProfile() || { age: '', weight_kg: '', height_cm: '' });
-  const [generatedMonths, setGenerated] = useState({});
+  const [planMonths, setPlanMonths]   = useState(() => {
+    try {
+      const stored = localStorage.getItem(PLAN_KEY);
+      if (stored) return JSON.parse(stored);
+    } catch {}
+    // Offline fallback: show first 2 months of intermediate plan
+    return { 1: intermediatePlan[0], 2: intermediatePlan[1] };
+  });
   const [activeMonth, setActiveMonth] = useState(0);
   const [activeWeek, setActiveWeek]   = useState(0);
   const [activeDay, setActiveDay]     = useState(0);
   const [screen, setScreen]           = useState('workout');
   const syncTimer = useRef(null);
+
+  // Persist plan to localStorage whenever it changes
+  useEffect(() => {
+    if (Object.keys(planMonths).length > 0) {
+      localStorage.setItem(PLAN_KEY, JSON.stringify(planMonths));
+    }
+  }, [planMonths]);
 
   // ── bootstrap ──────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -432,7 +481,6 @@ export default function App() {
     setProgress(prog);
     setWeightLog(loadWeightLogLocal());
     setBodyWeightLog(loadBodyWeightLocal());
-    setGenerated(loadGeneratedMonths());
 
     // Navigate to last active session
     const keys = Object.keys(prog);
@@ -470,19 +518,20 @@ export default function App() {
   };
 
   // ── Google sign-in ─────────────────────────────────────────────────────────
-  const handleSignedIn = async (token, profile) => {
-    setUser(profile);
+  const handleSignedIn = async (token, userProfile) => {
+    setUser(userProfile);
     setAccessToken(token);
     setSyncStatus('syncing');
     try {
-      const sid = await findOrCreateSheet(token, profile.email);
+      const sid = await findOrCreateSheet(token, userProfile.email);
       setSheetId(sid);
-      await ensureBodyWeightTab(token, sid);
-      const [remoteProgress, remoteWeights, remoteSettings, remoteBodyWeight] = await Promise.all([
+      await Promise.all([ensureBodyWeightTab(token, sid), ensurePlanTab(token, sid)]);
+      const [remoteProgress, remoteWeights, remoteSettings, remoteBodyWeight, planData] = await Promise.all([
         readProgress(token, sid),
         readWeightLog(token, sid),
         readSettings(token, sid),
         readBodyWeight(token, sid),
+        readPlan(token, sid),
       ]);
       // Merge progress
       const merged = { ...loadProgress(), ...remoteProgress };
@@ -506,10 +555,70 @@ export default function App() {
         ? [...remoteBodyWeight, ...localBodyWeight.filter(l => !remoteBodyWeight.some(r => r.date === l.date))]
         : localBodyWeight;
       setBodyWeightLog(mergedBodyWeight);
+      // Load or seed plan
+      if (Object.keys(planData).length === 0) {
+        setScreen('onboarding');
+      } else {
+        setPlanMonths(planData);
+      }
       setSyncStatus('synced');
     } catch (e) {
       console.error('Sheets init error:', e);
       setSyncStatus('error');
+    }
+  };
+
+  // ── onboarding ─────────────────────────────────────────────────────────────
+  const handleOnboardingSelect = async (level) => {
+    const planMap = { beginner: beginnerPlan, intermediate: intermediatePlan, pro: proPlan };
+    const selectedPlan = planMap[level];
+    const planData = {};
+    selectedPlan.forEach(m => { planData[m.id] = m; });
+    setPlanMonths(planData);
+    setScreen('workout');
+    if (accessToken && sheetId) {
+      try { await writePlanBatch(accessToken, sheetId, selectedPlan); }
+      catch { /* already saved in state */ }
+    }
+  };
+
+  // ── export ─────────────────────────────────────────────────────────────────
+  const handleExport = () => {
+    const completedMonths = Object.keys(planMonths).length;
+    const nextMonth = completedMonths + 1;
+    const prompt = `You are an expert personal trainer. The user has completed ${completedMonths} months of structured training. Based on their history and profile below, generate Month ${nextMonth} as a JSON object.\n\nProfile: ${JSON.stringify(profile)}\n\nCompleted plan summary: ${JSON.stringify(Object.fromEntries(Object.entries(planMonths).map(([k, v]) => [k, { theme: v.theme, weeks: v.weeks?.length }])))}\n\nGenerate Month ${nextMonth} matching this exact JSON structure:\n{\n  "id": ${nextMonth},\n  "label": "Month ${nextMonth}",\n  "theme": "Theme Name",\n  "description": "Brief description",\n  "gradient": ["#hexcolor1", "#hexcolor2"],\n  "weeks": [\n    {\n      "id": 1,\n      "label": "Week 1",\n      "theme": "Week theme",\n      "note": "Coach note",\n      "days": [\n        {\n          "day": "Day 1",\n          "label": "Day label",\n          "tag": "Push|Pull|Legs|Upper|Lower|Strength|Cardio|Recovery",\n          "color": "#hexcolor",\n          "exercises": [\n            { "name": "Exercise Name", "sets": 4, "reps": "10", "rest": "90s", "tip": "Form cue" }\n          ]\n        }\n      ]\n    }\n  ]\n}\n\nInclude 4 weeks, each week 4-6 days, 5-7 exercises per day. Make it progressive from Month ${completedMonths}. Return ONLY valid JSON, no markdown, no explanation.`;
+    const data = {
+      exportDate: new Date().toISOString().split('T')[0],
+      profile,
+      completedMonths,
+      plan: planMonths,
+      weightLog,
+      bodyWeightLog,
+      prompt,
+    };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `gymplan-export-${data.exportDate}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  // ── import plan ────────────────────────────────────────────────────────────
+  const handleImportPlan = async (file) => {
+    try {
+      const text = await file.text();
+      const data = JSON.parse(text);
+      if (!data.id || !Array.isArray(data.weeks)) throw new Error('Invalid plan format — must have "id" and "weeks"');
+      setPlanMonths(prev => ({ ...prev, [data.id]: data }));
+      if (accessToken && sheetId) {
+        try { await writePlanMonth(accessToken, sheetId, data); }
+        catch { /* saved in state */ }
+      }
+      return null;
+    } catch (e) {
+      return e.message;
     }
   };
 
@@ -594,35 +703,36 @@ export default function App() {
     setScreen('workout');
   };
 
-  // ── month generate ─────────────────────────────────────────────────────────
-  const handleMonthGenerated = (data) => {
-    setGenerated(prev => ({ ...prev, [data.id]: data }));
-  };
-
   // ── render ─────────────────────────────────────────────────────────────────
   if (!user) {
     return <GoogleSignIn clientId={CLIENT_ID} onSignedIn={handleSignedIn} />;
   }
 
-  const months = [
-    month1, month2,
-    generatedMonths[3] || null,
-    generatedMonths[4] || null,
-    generatedMonths[5] || null,
-    generatedMonths[6] || null,
-  ];
+  if (screen === 'onboarding') return <OnboardingScreen onSelect={handleOnboardingSelect} />;
 
-  const [g1, g2] = MONTH_GRADS[activeMonth + 1];
+  const maxMonthCount = Math.max(6, ...Object.keys(planMonths).map(Number));
+  const months = Array.from({ length: maxMonthCount }, (_, i) => planMonths[i + 1] ?? null);
+
+  const [g1, g2] = planMonths[activeMonth + 1]?.gradient ?? MONTH_GRADS[activeMonth + 1] ?? ['#1d4ed8', '#6d28d9'];
   const currentMonth = months[activeMonth];
 
-  if (screen === 'settings') return <SettingsScreen user={user} sheetId={sheetId} onClose={() => setScreen('workout')} onSignOut={handleSignOut} profile={profile} onSaveProfile={handleSaveProfile} bodyWeightLog={bodyWeightLog} onLogBodyWeight={handleLogBodyWeight} />;
+  if (screen === 'settings') return <SettingsScreen user={user} sheetId={sheetId} onClose={() => setScreen('workout')} onSignOut={handleSignOut} profile={profile} onSaveProfile={handleSaveProfile} bodyWeightLog={bodyWeightLog} onLogBodyWeight={handleLogBodyWeight} onExport={handleExport} onImportPlan={handleImportPlan} />;
   if (screen === 'weights')  return <WeightLogScreen weightLog={weightLog} onClose={() => setScreen('workout')} sheetId={sheetId} />;
 
   if (!currentMonth) {
     return (
       <div style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", background: '#f1f5f9', minHeight: '100vh', maxWidth: 480, margin: '0 auto' }}>
-        <AppHeader user={user} profile={profile} g1={g1} g2={g2} activeMonth={activeMonth} setActiveMonth={i => { setActiveMonth(i); setActiveWeek(0); setActiveDay(0); }} onSettings={() => setScreen('settings')} onWeights={() => setScreen('weights')} syncStatus={syncStatus} />
-        <MonthGenerator monthId={activeMonth + 1} previousMonths={months.filter(Boolean).slice(0, activeMonth)} onGenerated={handleMonthGenerated} g1={g1} g2={g2} />
+        <AppHeader user={user} profile={profile} g1={g1} g2={g2} activeMonth={activeMonth} setActiveMonth={i => { setActiveMonth(i); setActiveWeek(0); setActiveDay(0); }} onSettings={() => setScreen('settings')} onWeights={() => setScreen('weights')} syncStatus={syncStatus} months={months} />
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: 400, padding: 32, textAlign: 'center' }}>
+          <div style={{ fontSize: 48, marginBottom: 16 }}>📥</div>
+          <h2 style={{ fontSize: 20, fontWeight: 800, color: '#1e293b', margin: '0 0 8px' }}>Month {activeMonth + 1} not available yet</h2>
+          <p style={{ color: '#64748b', fontSize: 14, margin: '0 0 24px', maxWidth: 280, lineHeight: 1.6 }}>
+            Go to ⚙️ Settings → Export to get your history + AI prompt, then paste it into any AI tool and import the result.
+          </p>
+          <button onClick={() => setScreen('settings')} style={{ background: `linear-gradient(135deg, ${g1}, ${g2})`, color: '#fff', border: 'none', borderRadius: 16, padding: '14px 32px', fontSize: 15, fontWeight: 800, cursor: 'pointer' }}>
+            ⚙️ Open Settings
+          </button>
+        </div>
       </div>
     );
   }
@@ -644,7 +754,7 @@ export default function App() {
       <AppHeader user={user} profile={profile} g1={g1} g2={g2} activeMonth={activeMonth}
         setActiveMonth={i => { setActiveMonth(i); setActiveWeek(0); setActiveDay(0); }}
         onSettings={() => setScreen('settings')} onWeights={() => setScreen('weights')}
-        monthPct={monthPct} syncStatus={syncStatus}
+        monthPct={monthPct} syncStatus={syncStatus} months={months}
       />
 
       {/* week tabs */}
