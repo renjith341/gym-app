@@ -359,6 +359,27 @@ function SettingsScreen({ user, sheetId, onClose, onSignOut, profile, onSaveProf
           {importSuccess && <div style={{ color: '#15803d', fontSize: 13, marginTop: 6 }}>✓ Plan month imported successfully!</div>}
         </div>
 
+        {/* Clear cache */}
+        <div style={{ background: '#fff', borderRadius: 16, padding: 16, boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
+          <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 8 }}>🔄 App Version</div>
+          <div style={{ fontSize: 12, color: '#64748b', marginBottom: 10, lineHeight: 1.5 }}>
+            If you see an old version of the app, clear the cache and reload to get the latest update.
+          </div>
+          <button onClick={async () => {
+            if ('serviceWorker' in navigator) {
+              const regs = await navigator.serviceWorker.getRegistrations();
+              await Promise.all(regs.map(r => r.unregister()));
+            }
+            if ('caches' in window) {
+              const keys = await caches.keys();
+              await Promise.all(keys.map(k => caches.delete(k)));
+            }
+            window.location.reload(true);
+          }} style={{ width: '100%', padding: '10px', background: '#f1f5f9', color: '#1e293b', border: '1px solid #e2e8f0', borderRadius: 10, fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>
+            🔄 Clear Cache & Reload
+          </button>
+        </div>
+
         {/* Google Sheet */}
         <div style={{ background: '#fff', borderRadius: 16, padding: 16, boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
           <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 8 }}>📊 Google Sheet</div>
