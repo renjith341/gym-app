@@ -175,7 +175,7 @@ function OnboardingScreen({ onSelect }) {
   const handleSelect = (key) => { setLoading(key); onSelect(key); };
   return (
     <div style={{ minHeight: '100vh', background: '#f1f5f9', fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}>
-      <div style={{ background: 'linear-gradient(135deg, #1d4ed8, #6d28d9)', color: '#fff', padding: '32px 16px 24px', textAlign: 'center' }}>
+      <div style={{ background: 'linear-gradient(135deg, #1d4ed8, #6d28d9)', color: '#fff', padding: 'calc(32px + env(safe-area-inset-top)) 16px 24px', textAlign: 'center' }}>
         <div style={{ fontSize: 48, marginBottom: 8 }}>💪</div>
         <h1 style={{ margin: 0, fontSize: 24, fontWeight: 800 }}>Choose Your Training Level</h1>
         <p style={{ margin: '8px 0 0', opacity: 0.8, fontSize: 14 }}>Your 6-month plan will be saved to your Google Sheet</p>
@@ -210,7 +210,7 @@ function WeightLogScreen({ weightLog, onClose, sheetId }) {
 
   return (
     <div style={{ minHeight: '100vh', background: '#f1f5f9', fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}>
-      <div style={{ background: 'linear-gradient(135deg, #059669, #0d9488)', color: '#fff', padding: '20px 16px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
+      <div style={{ background: 'linear-gradient(135deg, #059669, #0d9488)', color: '#fff', padding: 'calc(20px + env(safe-area-inset-top)) 16px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
         <button onClick={onClose} style={{ background: 'rgba(255,255,255,0.2)', border: 'none', borderRadius: 8, padding: '6px 12px', color: '#fff', cursor: 'pointer', fontSize: 14 }}>← Back</button>
         <div style={{ fontWeight: 800, fontSize: 20, flex: 1 }}>📊 Weight Log</div>
         {sheetId && (
@@ -279,7 +279,7 @@ function SettingsScreen({ user, sheetId, onClose, onSignOut, profile, onSaveProf
 
   return (
     <div style={{ minHeight: '100vh', background: '#f1f5f9', fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}>
-      <div style={{ background: 'linear-gradient(135deg, #1e293b, #334155)', color: '#fff', padding: '20px 16px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
+      <div style={{ background: 'linear-gradient(135deg, #1e293b, #334155)', color: '#fff', padding: 'calc(20px + env(safe-area-inset-top)) 16px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
         <button onClick={onClose} style={{ background: 'rgba(255,255,255,0.2)', border: 'none', borderRadius: 8, padding: '6px 12px', color: '#fff', cursor: 'pointer', fontSize: 14 }}>← Back</button>
         <div style={{ fontWeight: 800, fontSize: 20 }}>⚙️ Settings</div>
       </div>
@@ -407,7 +407,7 @@ function DailyBodyWeight({ today, bodyWeightLog, onLog }) {
 function AppHeader({ user, profile, g1, g2, activeMonth, setActiveMonth, onSettings, onWeights, monthPct, syncStatus, months }) {
   return (
     <>
-      <div style={{ background: `linear-gradient(135deg, ${g1}, ${g2})`, color: '#fff', padding: '14px 16px 10px' }}>
+      <div style={{ background: `linear-gradient(135deg, ${g1}, ${g2})`, color: '#fff', padding: 'calc(14px + env(safe-area-inset-top)) 16px 10px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
             <div style={{ fontSize: 19, fontWeight: 800 }}>💪 Gym Training Plan</div>
@@ -721,7 +721,7 @@ export default function App() {
 
   if (!currentMonth) {
     return (
-      <div style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", background: '#f1f5f9', minHeight: '100vh', maxWidth: 480, margin: '0 auto' }}>
+      <div style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", background: '#f1f5f9', minHeight: '100vh' }}>
         <AppHeader user={user} profile={profile} g1={g1} g2={g2} activeMonth={activeMonth} setActiveMonth={i => { setActiveMonth(i); setActiveWeek(0); setActiveDay(0); }} onSettings={() => setScreen('settings')} onWeights={() => setScreen('weights')} syncStatus={syncStatus} months={months} />
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: 400, padding: 32, textAlign: 'center' }}>
           <div style={{ fontSize: 48, marginBottom: 16 }}>📥</div>
@@ -748,8 +748,8 @@ export default function App() {
   const monthPct   = monthTotal ? Math.round(monthDone / monthTotal * 100) : 0;
 
   return (
-    <div style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", background: '#f1f5f9', minHeight: '100vh', maxWidth: 480, margin: '0 auto' }}>
-      <style>{`@keyframes spin { to { transform: rotate(360deg); } } * { -webkit-tap-highlight-color: transparent; box-sizing: border-box; }`}</style>
+    <div style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", background: '#f1f5f9', minHeight: '100vh' }}>
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } } * { -webkit-tap-highlight-color: transparent; box-sizing: border-box; } body { margin: 0; background: #f1f5f9; }`}</style>
 
       <AppHeader user={user} profile={profile} g1={g1} g2={g2} activeMonth={activeMonth}
         setActiveMonth={i => { setActiveMonth(i); setActiveWeek(0); setActiveDay(0); }}
@@ -766,7 +766,7 @@ export default function App() {
         ))}
       </div>
 
-      <div style={{ padding: '12px 12px 48px' }}>
+      <div style={{ padding: '12px 12px calc(48px + env(safe-area-inset-bottom))' }}>
         {/* coach note */}
         <div style={{ background: '#fffbeb', border: '1px solid #fcd34d', borderRadius: 12, padding: '10px 12px', fontSize: 13, color: '#92400e', marginBottom: 10 }}>
           <span style={{ fontWeight: 700 }}>📋 Coach: </span>{week.note}
