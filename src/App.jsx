@@ -125,11 +125,11 @@ function ExerciseCard({ ex, isDone, onToggle, onLogWeight, exerciseWeightLog, on
               </div>
             )}
             <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 6 }}>Set {nextSetNum}</div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <input value={kg} onChange={e => setKg(e.target.value)} placeholder="kg" type="number" inputMode="decimal" style={{ flex: 1, padding: '7px 10px', borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 14 }} />
-              <input value={reps} onChange={e => setReps(e.target.value)} placeholder="reps" type="number" inputMode="numeric" style={{ flex: 1, padding: '7px 10px', borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 14 }} />
-              <button onClick={handleLog} style={{ padding: '7px 14px', background: '#1d4ed8', color: '#fff', borderRadius: 8, border: 'none', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>Save</button>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
+              <input value={kg} onChange={e => setKg(e.target.value)} placeholder="kg" type="number" inputMode="decimal" style={{ padding: '8px 10px', borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 14, minWidth: 0 }} />
+              <input value={reps} onChange={e => setReps(e.target.value)} placeholder="reps" type="number" inputMode="numeric" style={{ padding: '8px 10px', borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 14, minWidth: 0 }} />
             </div>
+            <button onClick={handleLog} style={{ width: '100%', padding: '9px', background: '#1d4ed8', color: '#fff', borderRadius: 8, border: 'none', fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>Save Set {nextSetNum}</button>
           </div>
         )}
       </div>
