@@ -6,6 +6,7 @@ import { loadProgress, saveProgressLocal, loadWeightLogLocal, saveWeightLocal, d
 import { getStoredUser, signOut, loadGoogleScript, initTokenClient, requestAccessToken } from './utils/googleAuth';
 import { findOrCreateSheet, readProgress, writeProgress, readWeightLog, appendWeightEntry, deleteWeightEntry, getSheetUrl, getCachedSheetId, readSettings, writeSettings, readBodyWeight, appendBodyWeight, ensureBodyWeightTab, ensurePlanTab, readPlan, writePlanMonth, writePlanBatch } from './utils/googleSheets';
 import GoogleSignIn from './components/GoogleSignIn';
+import { detectDayType, getWarmupExercises, getCooldownExercises } from './data/warmupCooldown';
 
 const PLAN_KEY = 'gymplan_plan';
 
@@ -91,6 +92,55 @@ function TimerModal({ totalSeconds, label, onClose }) {
           ✕ Close
         </button>
       </div>
+    </div>
+  );
+}
+
+// ─────────────── WARMUP / COOLDOWN MODAL ──────────────────────────────────────
+function WarmupCooldownModal({ type, dayType, onClose }) {
+  const [timerEx, setTimerEx] = useState(null);
+  const isWarmup  = type === 'warmup';
+  const exercises = isWarmup ? getWarmupExercises(dayType) : getCooldownExercises(dayType);
+  const totalMin  = Math.round(exercises.reduce((s, e) => s + e.duration_seconds, 0) / 60);
+  const accent    = isWarmup ? '#f97316' : '#0ea5e9';
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 998, background: 'rgba(15,23,42,0.85)', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ flex: 1, overflowY: 'auto', background: '#0f172a', display: 'flex', flexDirection: 'column' }}>
+        {/* header */}
+        <div style={{ background: accent, padding: 'calc(18px + env(safe-area-inset-top)) 16px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div>
+            <div style={{ fontWeight: 800, fontSize: 20, color: '#fff' }}>{isWarmup ? '🔥 Warmup' : '🧊 Cooldown'}</div>
+            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.8)', marginTop: 2 }}>~{totalMin} min · {exercises.length} exercises</div>
+          </div>
+          <button onClick={onClose} style={{ background: 'rgba(255,255,255,0.2)', border: 'none', borderRadius: 10, padding: '8px 14px', color: '#fff', fontWeight: 700, fontSize: 15, cursor: 'pointer' }}>✕</button>
+        </div>
+
+        {/* exercise list */}
+        <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {exercises.map((ex, i) => (
+            <div key={ex.id} style={{ background: '#1e293b', borderRadius: 14, padding: '12px 14px', display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+              {/* step number */}
+              <div style={{ minWidth: 28, height: 28, borderRadius: '50%', background: accent, color: '#fff', fontWeight: 800, fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{i + 1}</div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+                  <div style={{ fontWeight: 700, fontSize: 14, color: '#f8fafc', lineHeight: 1.3 }}>{ex.name}</div>
+                  <div style={{ display: 'flex', gap: 6, flexShrink: 0, alignItems: 'center' }}>
+                    <span style={{ background: accent + '33', color: accent, borderRadius: 8, padding: '2px 8px', fontSize: 12, fontWeight: 700 }}>{ex.duration_label}</span>
+                    <button onClick={() => setTimerEx(ex)} style={{ background: '#334155', border: 'none', borderRadius: 8, padding: '4px 8px', fontSize: 13, cursor: 'pointer' }}>⏱️</button>
+                  </div>
+                </div>
+                <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 5, lineHeight: 1.5 }}>{ex.tip}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+        <div style={{ height: 'calc(24px + env(safe-area-inset-bottom))' }} />
+      </div>
+
+      {timerEx && (
+        <TimerModal totalSeconds={timerEx.duration_seconds} label={timerEx.name} onClose={() => setTimerEx(null)} />
+      )}
     </div>
   );
 }
@@ -824,6 +874,8 @@ export default function App() {
 
   if (screen === 'onboarding') return <OnboardingScreen onSelect={handleOnboardingSelect} />;
 
+  const [wcPanel, setWcPanel] = useState(null); // 'warmup' | 'cooldown' | null
+
   const maxMonthCount = Math.max(6, ...Object.keys(planMonths).map(Number));
   const months = Array.from({ length: maxMonthCount }, (_, i) => planMonths[i + 1] ?? null);
 
@@ -908,9 +960,15 @@ export default function App() {
               <div style={{ fontWeight: 800, fontSize: 16, color: '#1e293b' }}>{day.day}: {day.label}</div>
               <span style={{ background: day.color + '22', color: day.color, borderRadius: 20, padding: '2px 10px', fontSize: 11, fontWeight: 700, marginTop: 4, display: 'inline-block' }}>{day.tag}</span>
             </div>
-            <div style={{ textAlign: 'right' }}>
-              <div style={{ fontSize: 28, fontWeight: 900, color: g1 }}>{pct}%</div>
-              <div style={{ fontSize: 11, color: '#94a3b8' }}>{doneSets}/{totalSets} sets</div>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <button onClick={() => setWcPanel('warmup')} style={{ background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 8, padding: '4px 9px', fontSize: 13, cursor: 'pointer' }}>🔥</button>
+                <button onClick={() => setWcPanel('cooldown')} style={{ background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: 8, padding: '4px 9px', fontSize: 13, cursor: 'pointer' }}>🧊</button>
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ fontSize: 28, fontWeight: 900, color: g1 }}>{pct}%</div>
+                <div style={{ fontSize: 11, color: '#94a3b8' }}>{doneSets}/{totalSets} sets</div>
+              </div>
             </div>
           </div>
           <div style={{ background: '#e2e8f0', borderRadius: 99, height: 6, marginTop: 10 }}>
@@ -945,6 +1003,14 @@ export default function App() {
         </div>
         <div style={{ textAlign: 'center', fontSize: 12, color: '#94a3b8', marginTop: 16 }}>Trust the process 💪</div>
       </div>
+
+      {wcPanel && (
+        <WarmupCooldownModal
+          type={wcPanel}
+          dayType={detectDayType(day)}
+          onClose={() => setWcPanel(null)}
+        />
+      )}
     </div>
   );
 }
