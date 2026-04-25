@@ -11,6 +11,90 @@ const PLAN_KEY = 'gymplan_plan';
 
 const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
 
+// Parse timed reps like "45s", "30 sec", "10 min" → seconds. Returns null if not timed.
+function parseTimedReps(repsStr) {
+  if (!repsStr) return null;
+  const s = String(repsStr).toLowerCase().trim();
+  const secMatch = s.match(/^(\d+(?:\.\d+)?)\s*s(?:ec)?/);
+  if (secMatch) return Math.round(parseFloat(secMatch[1]));
+  const minMatch = s.match(/^(\d+(?:\.\d+)?)\s*m(?:in)?/);
+  if (minMatch) return Math.round(parseFloat(minMatch[1]) * 60);
+  return null;
+}
+
+// ─────────────── TIMER MODAL ──────────────────────────────────────────────────
+function TimerModal({ totalSeconds, label, onClose }) {
+  const [elapsed, setElapsed] = useState(0);
+  const [running, setRunning] = useState(false);
+  const intervalRef = useRef(null);
+  const done = elapsed >= totalSeconds;
+
+  useEffect(() => {
+    if (running && !done) {
+      intervalRef.current = setInterval(() => setElapsed(e => e + 1), 1000);
+    } else {
+      clearInterval(intervalRef.current);
+    }
+    return () => clearInterval(intervalRef.current);
+  }, [running, done]);
+
+  const radius = 88;
+  const circ = 2 * Math.PI * radius;
+  const progress = Math.min(elapsed / totalSeconds, 1);
+  const offset = circ * (1 - progress);
+
+  const fmt = s => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 999, background: 'rgba(15,23,42,0.92)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 28 }}
+      onClick={e => e.target === e.currentTarget && onClose()}>
+      <div style={{ color: '#94a3b8', fontSize: 14, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase' }}>{label}</div>
+
+      {/* SVG arc */}
+      <svg width={200} height={200} style={{ transform: 'rotate(-90deg)' }}>
+        <circle cx={100} cy={100} r={radius} fill="none" stroke="#1e293b" strokeWidth={10} />
+        <circle cx={100} cy={100} r={radius} fill="none"
+          stroke={done ? '#22c55e' : '#6366f1'}
+          strokeWidth={10}
+          strokeDasharray={circ}
+          strokeDashoffset={offset}
+          strokeLinecap="round"
+          style={{ transition: 'stroke-dashoffset 0.4s linear, stroke 0.3s' }}
+        />
+      </svg>
+
+      {/* time + label inside arc */}
+      <div style={{ marginTop: -168, marginBottom: 140, textAlign: 'center', pointerEvents: 'none' }}>
+        <div style={{ fontSize: 48, fontWeight: 800, color: done ? '#22c55e' : '#f8fafc', fontVariantNumeric: 'tabular-nums', letterSpacing: -1 }}>
+          {fmt(elapsed)}
+        </div>
+        <div style={{ fontSize: 13, color: '#64748b', marginTop: 2 }}>/ {fmt(totalSeconds)}</div>
+        {done && <div style={{ color: '#22c55e', fontWeight: 700, fontSize: 16, marginTop: 6 }}>Done! 🎉</div>}
+      </div>
+
+      {/* controls */}
+      <div style={{ display: 'flex', gap: 16 }}>
+        {!done && (
+          <button onClick={() => setRunning(r => !r)}
+            style={{ padding: '13px 32px', borderRadius: 14, border: 'none', background: running ? '#334155' : '#6366f1', color: '#fff', fontWeight: 700, fontSize: 16, cursor: 'pointer', minWidth: 110 }}>
+            {running ? '⏸ Pause' : elapsed === 0 ? '▶ Start' : '▶ Resume'}
+          </button>
+        )}
+        {done && (
+          <button onClick={() => { setElapsed(0); setRunning(false); }}
+            style={{ padding: '13px 32px', borderRadius: 14, border: 'none', background: '#334155', color: '#fff', fontWeight: 700, fontSize: 16, cursor: 'pointer' }}>
+            🔄 Restart
+          </button>
+        )}
+        <button onClick={onClose}
+          style={{ padding: '13px 24px', borderRadius: 14, border: 'none', background: '#1e293b', color: '#94a3b8', fontWeight: 700, fontSize: 16, cursor: 'pointer' }}>
+          ✕ Close
+        </button>
+      </div>
+    </div>
+  );
+}
+
 const MONTH_GRADS = {
   1: ['#1d4ed8','#6d28d9'],
   2: ['#0d9488','#059669'],
@@ -42,8 +126,11 @@ function ExerciseCard({ ex, isDone, onToggle, onLogWeight, exerciseWeightLog, on
   const [imgUrl, setImgUrl]     = useState(null);
   const [imgLoading, setImgLoading] = useState(false);
   const [showLog, setShowLog]   = useState(false);
+  const [showTimer, setShowTimer] = useState(false);
   const [kg, setKg]             = useState('');
   const [reps, setReps]         = useState(String(ex.reps));
+
+  const timerSeconds = parseTimedReps(ex.reps);
 
   const allDone = Array.from({ length: ex.sets }).every((_, si) => isDone(si));
 
@@ -91,6 +178,9 @@ function ExerciseCard({ ex, isDone, onToggle, onLogWeight, exerciseWeightLog, on
           </div>
           <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
             {allDone && <span style={{ color: '#22c55e', fontWeight: 900, fontSize: 18, lineHeight: 1 }}>✓</span>}
+            {timerSeconds && (
+              <button onClick={() => setShowTimer(true)} style={{ background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: 8, padding: '4px 9px', fontSize: 12, cursor: 'pointer', color: '#475569' }}>⏱️</button>
+            )}
             <button onClick={() => setShowLog(l => !l)} style={{ background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: 8, padding: '4px 9px', fontSize: 12, cursor: 'pointer', color: '#475569' }}>⚖️</button>
             <button onClick={handleExpand} style={{ background: expanded ? '#f1f5f9' : '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '4px 9px', fontSize: 11, fontWeight: 600, color: '#475569', cursor: 'pointer' }}>
               {expanded ? '▲' : '📷'}
@@ -159,6 +249,9 @@ function ExerciseCard({ ex, isDone, onToggle, onLogWeight, exerciseWeightLog, on
             </div>
           )}
         </div>
+      )}
+      {showTimer && timerSeconds && (
+        <TimerModal totalSeconds={timerSeconds} label={ex.name} onClose={() => setShowTimer(false)} />
       )}
     </div>
   );
