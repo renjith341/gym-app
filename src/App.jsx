@@ -384,7 +384,7 @@ function WeightLogScreen({ weightLog, onClose, sheetId }) {
 }
 
 // ─────────────── SETTINGS SCREEN ──────────────────────────────────────────────
-function SettingsScreen({ user, sheetId, onClose, onSignOut, profile, onSaveProfile, bodyWeightLog, onLogBodyWeight, onExport, onImportPlan }) {
+function SettingsScreen({ user, sheetId, onClose, onSignOut, profile, onSaveProfile, bodyWeightLog, onLogBodyWeight, onExport, onImportPlan, onRefetch }) {
   const [age, setAge]           = useState(profile.age || '');
   const [weightKg, setWeightKg] = useState(profile.weight_kg || '');
   const [heightCm, setHeightCm] = useState(profile.height_cm || '');
@@ -392,7 +392,22 @@ function SettingsScreen({ user, sheetId, onClose, onSignOut, profile, onSaveProf
   const [bwKg, setBwKg]         = useState('');
   const [importError, setImportError]     = useState('');
   const [importSuccess, setImportSuccess] = useState(false);
+  const [syncing, setSyncing]   = useState(false);
+  const [syncMsg, setSyncMsg]   = useState('');
   const today = new Date().toISOString().split('T')[0];
+
+  const handleRefetch = async () => {
+    setSyncing(true);
+    setSyncMsg('');
+    try {
+      await onRefetch();
+      setSyncMsg('✓ Data refreshed');
+    } catch {
+      setSyncMsg('⚠ Refresh failed — check connection');
+    }
+    setSyncing(false);
+    setTimeout(() => setSyncMsg(''), 3000);
+  };
   const todayEntry = bodyWeightLog.find(e => e.date === today);
 
   const handleSave = () => {
@@ -529,6 +544,11 @@ function SettingsScreen({ user, sheetId, onClose, onSignOut, profile, onSaveProf
           <div style={{ fontSize: 13, color: '#64748b', marginBottom: 12, lineHeight: 1.6 }}>
             Progress, weights, and body weight sync to your private Google Sheet.
           </div>
+          <button onClick={handleRefetch} disabled={syncing || !sheetId}
+            style={{ width: '100%', padding: '10px', background: syncing ? '#f1f5f9' : '#eff6ff', color: syncing ? '#94a3b8' : '#1d4ed8', border: '1px solid #bfdbfe', borderRadius: 10, fontWeight: 700, fontSize: 14, cursor: sheetId ? 'pointer' : 'not-allowed', marginBottom: 8 }}>
+            {syncing ? '⏳ Fetching…' : '☁️ Fetch Latest from Sheet'}
+          </button>
+          {syncMsg && <div style={{ fontSize: 13, color: syncMsg.startsWith('✓') ? '#15803d' : '#dc2626', marginBottom: 8, textAlign: 'center' }}>{syncMsg}</div>}
           {sheetId ? (
             <a href={getSheetUrl(sheetId)} target="_blank" rel="noreferrer" style={{ display: 'block', textAlign: 'center', padding: '10px', background: '#f0fdf4', color: '#15803d', border: '1px solid #bbf7d0', borderRadius: 10, fontWeight: 700, fontSize: 14, textDecoration: 'none' }}>
               Open My Google Sheet ↗
@@ -859,6 +879,40 @@ export default function App() {
     }
   };
 
+  // ── refetch from sheet ─────────────────────────────────────────────────────
+  const handleRefetch = async () => {
+    if (!accessToken || !sheetId) throw new Error('Not connected');
+    const [remoteProgress, remoteWeights, remoteSettings, remoteBodyWeight, planData] = await Promise.all([
+      readProgress(accessToken, sheetId),
+      readWeightLog(accessToken, sheetId),
+      readSettings(accessToken, sheetId),
+      readBodyWeight(accessToken, sheetId),
+      readPlan(accessToken, sheetId),
+    ]);
+    const merged = { ...loadProgress(), ...remoteProgress };
+    setProgress(merged);
+    saveProgressLocal(merged);
+    const localWeights = loadWeightLogLocal();
+    const mergedWeights = remoteWeights.length > 0
+      ? [...remoteWeights, ...localWeights.filter(l => !remoteWeights.some(r => r.date === l.date && r.exercise === l.exercise && r.weight === l.weight))]
+      : localWeights;
+    setWeightLog(mergedWeights);
+    if (remoteSettings.profile_age !== undefined) {
+      const p = { age: remoteSettings.profile_age, weight_kg: remoteSettings.profile_weight_kg, height_cm: remoteSettings.profile_height_cm };
+      setProfile(p);
+      saveProfile(p);
+    }
+    const localBw = loadBodyWeightLocal();
+    setBodyWeightLog(remoteBodyWeight.length > 0
+      ? [...remoteBodyWeight, ...localBw.filter(l => !remoteBodyWeight.some(r => r.date === l.date))]
+      : localBw);
+    if (Object.keys(planData).length > 0) {
+      setPlanMonths(planData);
+      setActiveWeek(0);
+      setActiveDay(0);
+    }
+  };
+
   // ── sign out ───────────────────────────────────────────────────────────────
   const handleSignOut = () => {
     signOut();
@@ -884,7 +938,7 @@ export default function App() {
   const [g1, g2] = planMonths[activeMonth + 1]?.gradient ?? MONTH_GRADS[activeMonth + 1] ?? ['#1d4ed8', '#6d28d9'];
   const currentMonth = months[activeMonth];
 
-  if (screen === 'settings') return <SettingsScreen user={user} sheetId={sheetId} onClose={() => setScreen('workout')} onSignOut={handleSignOut} profile={profile} onSaveProfile={handleSaveProfile} bodyWeightLog={bodyWeightLog} onLogBodyWeight={handleLogBodyWeight} onExport={handleExport} onImportPlan={handleImportPlan} />;
+  if (screen === 'settings') return <SettingsScreen user={user} sheetId={sheetId} onClose={() => setScreen('workout')} onSignOut={handleSignOut} profile={profile} onSaveProfile={handleSaveProfile} bodyWeightLog={bodyWeightLog} onLogBodyWeight={handleLogBodyWeight} onExport={handleExport} onImportPlan={handleImportPlan} onRefetch={handleRefetch} />;
   if (screen === 'weights')  return <WeightLogScreen weightLog={weightLog} onClose={() => setScreen('workout')} sheetId={sheetId} />;
 
   if (!currentMonth) {
