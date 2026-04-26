@@ -4,7 +4,7 @@ import { intermediatePlan } from './data/plans/intermediate';
 import { proPlan } from './data/plans/pro';
 import { loadProgress, saveProgressLocal, loadWeightLogLocal, saveWeightLocal, deleteWeightLocal, loadProfile, saveProfile, loadBodyWeightLocal, saveBodyWeightLocal } from './utils/storage';
 import { getStoredUser, signOut, loadGoogleScript, initTokenClient, requestAccessToken } from './utils/googleAuth';
-import { findOrCreateSheet, readProgress, writeProgress, readWeightLog, appendWeightEntry, deleteWeightEntry, getSheetUrl, getCachedSheetId, readSettings, writeSettings, readBodyWeight, appendBodyWeight, ensureBodyWeightTab, ensurePlanTab, readPlan, writePlanMonth, writePlanBatch } from './utils/googleSheets';
+import { findOrCreateSheet, readProgress, writeProgressChanges, readWeightLog, appendWeightEntry, deleteWeightEntry, getSheetUrl, getCachedSheetId, readSettings, writeSettings, readBodyWeight, appendBodyWeight, ensureBodyWeightTab, ensurePlanTab, readPlan, writePlanMonth, writePlanBatch } from './utils/googleSheets';
 import GoogleSignIn from './components/GoogleSignIn';
 import { detectDayType, getWarmupExercises, getCooldownExercises } from './data/warmupCooldown';
 
@@ -650,7 +650,8 @@ export default function App() {
   const [activeWeek, setActiveWeek]   = useState(0);
   const [activeDay, setActiveDay]     = useState(0);
   const [screen, setScreen]           = useState('workout');
-  const syncTimer = useRef(null);
+  const syncTimer        = useRef(null);
+  const pendingChanges   = useRef({});
 
   // Persist plan to localStorage whenever it changes
   useEffect(() => {
@@ -808,14 +809,17 @@ export default function App() {
     }
   };
 
-  // ── debounced sync ─────────────────────────────────────────────────────────
-  const syncProgress = useCallback((newProgress) => {
+  // ── debounced sync — flushes only the changed keys ────────────────────────
+  const syncProgress = useCallback((key, value) => {
     if (!accessToken || !sheetId) return;
+    pendingChanges.current[key] = value;
     clearTimeout(syncTimer.current);
     setSyncStatus('syncing');
     syncTimer.current = setTimeout(async () => {
+      const changes = { ...pendingChanges.current };
+      pendingChanges.current = {};
       try {
-        await writeProgress(accessToken, sheetId, newProgress);
+        await writeProgressChanges(accessToken, sheetId, changes);
         setSyncStatus('synced');
       } catch {
         setSyncStatus('error');
@@ -825,12 +829,11 @@ export default function App() {
 
   // ── toggle set ─────────────────────────────────────────────────────────────
   const toggleSet = (monthIdx, weekIdx, dayIdx, exIdx, setIdx) => {
-    const key  = `m${monthIdx+1}-w${weekIdx+1}-d${dayIdx+1}-e${exIdx}-s${setIdx}`;
-    const next = { ...progress };
-    if (next[key]) delete next[key]; else next[key] = true;
-    setProgress(next);
-    saveProgressLocal(next);
-    syncProgress(next);
+    const key   = `m${monthIdx+1}-w${weekIdx+1}-d${dayIdx+1}-e${exIdx}-s${setIdx}`;
+    const value = !progress[key];
+    setProgress(prev => ({ ...prev, [key]: value }));
+    saveProgressLocal({ ...progress, [key]: value });
+    syncProgress(key, value);
   };
 
   const isSetDone = (mi, wi, di, ei, si) => !!progress[`m${mi+1}-w${wi+1}-d${di+1}-e${ei}-s${si}`];

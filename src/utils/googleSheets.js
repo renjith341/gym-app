@@ -105,6 +105,32 @@ export async function readProgress(token, sheetId) {
   return progress;
 }
 
+// Write only changed entries — changes is { key: true|false }
+export async function writeProgressChanges(token, sheetId, changes) {
+  if (Object.keys(changes).length === 0) return;
+  const data = await api(`${SHEETS_BASE}/${sheetId}/values/Progress!A:A`, token);
+  const existingKeys = (data.values || []).slice(1).map(r => r[0]);
+  const now = new Date().toISOString();
+
+  const newRows = [];
+  const updates = [];
+  for (const [k, v] of Object.entries(changes)) {
+    const rowNum = existingKeys.indexOf(k);
+    if (rowNum === -1) {
+      newRows.push([k, v ? 'TRUE' : 'FALSE', now]);
+    } else {
+      updates.push({ range: `Progress!B${rowNum + 2}:C${rowNum + 2}`, values: [[v ? 'TRUE' : 'FALSE', now]] });
+    }
+  }
+
+  const reqs = [];
+  if (newRows.length > 0)
+    reqs.push(api(`${SHEETS_BASE}/${sheetId}/values/Progress!A:C:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`, token, { method: 'POST', body: JSON.stringify({ values: newRows }) }));
+  if (updates.length > 0)
+    reqs.push(api(`${SHEETS_BASE}/${sheetId}/values:batchUpdate`, token, { method: 'POST', body: JSON.stringify({ valueInputOption: 'RAW', data: updates }) }));
+  await Promise.all(reqs);
+}
+
 export async function writeProgress(token, sheetId, progress) {
   // Read existing rows to preserve row numbers (avoid duplicates)
   const data = await api(
