@@ -221,9 +221,10 @@ function ExerciseCard({ ex, isDone, onToggle, onLogWeight, exerciseWeightLog, on
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
           <div style={{ flex: 1 }}>
             <div style={{ fontWeight: 700, fontSize: 15, color: '#1e293b', textDecoration: allDone ? 'line-through' : 'none' }}>{ex.name}</div>
-            <div style={{ display: 'flex', gap: 10, marginTop: 4, fontSize: 12, color: '#64748b', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', gap: 10, marginTop: 4, fontSize: 12, color: '#64748b', flexWrap: 'wrap', alignItems: 'center' }}>
               <span>🔁 {ex.sets} × {ex.reps}</span>
               {ex.rest !== '—' && <span>⏱ {ex.rest}</span>}
+              {ex.muscle && <span style={{ background: '#f1f5f9', color: '#475569', borderRadius: 6, padding: '1px 7px', fontSize: 11, fontWeight: 600 }}>💪 {ex.muscle}</span>}
             </div>
           </div>
           <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
@@ -1020,13 +1021,15 @@ export default function App() {
               <div style={{ fontWeight: 800, fontSize: 16, color: '#1e293b' }}>{day.day}: {day.label}</div>
               <span style={{ background: day.color + '22', color: day.color, borderRadius: 20, padding: '2px 10px', fontSize: 11, fontWeight: 700, marginTop: 4, display: 'inline-block' }}>{day.tag}</span>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <button onClick={() => setShowRestTimer(true)} style={{ background: '#f5f3ff', border: '1px solid #ddd6fe', borderRadius: 8, padding: '4px 9px', fontSize: 13, cursor: 'pointer' }}>⏱️</button>
-              <button onClick={() => setWcPanel('warmup')} style={{ background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 8, padding: '4px 9px', fontSize: 13, cursor: 'pointer' }}>🔥</button>
-              <button onClick={() => setWcPanel('cooldown')} style={{ background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: 8, padding: '4px 9px', fontSize: 13, cursor: 'pointer' }}>🧊</button>
-              <div style={{ textAlign: 'right', minWidth: 48 }}>
-                <div style={{ fontSize: 24, fontWeight: 900, color: g1, lineHeight: 1 }}>{pct}%</div>
-                <div style={{ fontSize: 10, color: '#94a3b8' }}>{doneSets}/{totalSets}</div>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <button onClick={() => setShowRestTimer(true)} style={{ background: '#f5f3ff', border: '1px solid #ddd6fe', borderRadius: 8, padding: '4px 9px', fontSize: 13, cursor: 'pointer' }}>⏱️</button>
+                <button onClick={() => setWcPanel('warmup')} style={{ background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 8, padding: '4px 9px', fontSize: 13, cursor: 'pointer' }}>🔥</button>
+                <button onClick={() => setWcPanel('cooldown')} style={{ background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: 8, padding: '4px 9px', fontSize: 13, cursor: 'pointer' }}>🧊</button>
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ fontSize: 28, fontWeight: 900, color: g1 }}>{pct}%</div>
+                <div style={{ fontSize: 11, color: '#94a3b8' }}>{doneSets}/{totalSets} sets</div>
               </div>
             </div>
           </div>
