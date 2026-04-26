@@ -933,7 +933,8 @@ export default function App() {
 
   if (screen === 'onboarding') return <OnboardingScreen onSelect={handleOnboardingSelect} />;
 
-  const [wcPanel, setWcPanel] = useState(null); // 'warmup' | 'cooldown' | null
+  const [wcPanel, setWcPanel]       = useState(null); // 'warmup' | 'cooldown' | null
+  const [showRestTimer, setShowRestTimer] = useState(false);
 
   const maxMonthCount = Math.max(6, ...Object.keys(planMonths).map(Number));
   const months = Array.from({ length: maxMonthCount }, (_, i) => planMonths[i + 1] ?? null);
@@ -1019,14 +1020,13 @@ export default function App() {
               <div style={{ fontWeight: 800, fontSize: 16, color: '#1e293b' }}>{day.day}: {day.label}</div>
               <span style={{ background: day.color + '22', color: day.color, borderRadius: 20, padding: '2px 10px', fontSize: 11, fontWeight: 700, marginTop: 4, display: 'inline-block' }}>{day.tag}</span>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
-              <div style={{ display: 'flex', gap: 6 }}>
-                <button onClick={() => setWcPanel('warmup')} style={{ background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 8, padding: '4px 9px', fontSize: 13, cursor: 'pointer' }}>🔥</button>
-                <button onClick={() => setWcPanel('cooldown')} style={{ background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: 8, padding: '4px 9px', fontSize: 13, cursor: 'pointer' }}>🧊</button>
-              </div>
-              <div style={{ textAlign: 'right' }}>
-                <div style={{ fontSize: 28, fontWeight: 900, color: g1 }}>{pct}%</div>
-                <div style={{ fontSize: 11, color: '#94a3b8' }}>{doneSets}/{totalSets} sets</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <button onClick={() => setShowRestTimer(true)} style={{ background: '#f5f3ff', border: '1px solid #ddd6fe', borderRadius: 8, padding: '4px 9px', fontSize: 13, cursor: 'pointer' }}>⏱️</button>
+              <button onClick={() => setWcPanel('warmup')} style={{ background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 8, padding: '4px 9px', fontSize: 13, cursor: 'pointer' }}>🔥</button>
+              <button onClick={() => setWcPanel('cooldown')} style={{ background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: 8, padding: '4px 9px', fontSize: 13, cursor: 'pointer' }}>🧊</button>
+              <div style={{ textAlign: 'right', minWidth: 48 }}>
+                <div style={{ fontSize: 24, fontWeight: 900, color: g1, lineHeight: 1 }}>{pct}%</div>
+                <div style={{ fontSize: 10, color: '#94a3b8' }}>{doneSets}/{totalSets}</div>
               </div>
             </div>
           </div>
@@ -1063,6 +1063,9 @@ export default function App() {
         <div style={{ textAlign: 'center', fontSize: 12, color: '#94a3b8', marginTop: 16 }}>Trust the process 💪</div>
       </div>
 
+      {showRestTimer && (
+        <TimerModal totalSeconds={60} label="Rest Timer" onClose={() => setShowRestTimer(false)} />
+      )}
       {wcPanel && (
         <WarmupCooldownModal
           type={wcPanel}
