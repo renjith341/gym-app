@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git add src/components/GoogleSignIn.jsx)",
+      "Bash(git commit -m \"Add console.error for sign-in debugging\")"
+    ]
+  }
+}
