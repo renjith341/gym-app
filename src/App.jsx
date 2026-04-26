@@ -724,6 +724,8 @@ export default function App() {
         setScreen('onboarding');
       } else {
         setPlanMonths(planData);
+        setActiveWeek(0);
+        setActiveDay(0);
       }
       setSyncStatus('synced');
     } catch (e) {
@@ -903,8 +905,8 @@ export default function App() {
     );
   }
 
-  const week = currentMonth.weeks[activeWeek];
-  const day  = week?.days[activeDay];
+  const week = currentMonth.weeks[activeWeek] ?? currentMonth.weeks[0];
+  const day  = week?.days[activeDay] ?? week?.days[0];
 
   const totalSets  = day?.exercises.reduce((a, ex) => a + ex.sets, 0) || 0;
   const doneSets   = day?.exercises.reduce((a, ex, ei) => a + Array.from({ length: ex.sets }).filter((_, si) => isSetDone(activeMonth, activeWeek, activeDay, ei, si)).length, 0) || 0;
