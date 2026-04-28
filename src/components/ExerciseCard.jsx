@@ -76,7 +76,7 @@ export default function ExerciseCard({ ex, isDone, onToggle, onLogWeight, exerci
         </div>
 
         {/* set buttons */}
-        {ex.sets > 1 && (
+        {ex.sets >= 1 && (
           <div style={{ display: 'flex', gap: 7, marginTop: 10, flexWrap: 'wrap' }}>
             {Array.from({ length: ex.sets }).map((_, si) => (
               <button key={si} onClick={() => onToggle(si)} style={{ padding: '5px 13px', borderRadius: 9, border: isDone(si) ? '1.5px solid #22c55e' : '1.5px solid #e2e8f0', background: isDone(si) ? '#f0fdf4' : '#f8fafc', color: isDone(si) ? '#16a34a' : '#64748b', fontWeight: 700, fontSize: 12, cursor: 'pointer', transition: 'all 0.15s' }}>
