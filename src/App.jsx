@@ -19,6 +19,13 @@ import AppHeader from './components/AppHeader';
 
 const PLAN_KEY = 'gymplan_plan';
 
+// Date.now() alone collides when several sets are logged in the same millisecond (autofill)
+let lastEntryId = 0;
+const nextEntryId = () => {
+  lastEntryId = Math.max(Date.now(), lastEntryId + 1);
+  return lastEntryId;
+};
+
 const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
 
 // ─────────────── ROOT APP ─────────────────────────────────────────────────────
@@ -233,7 +240,7 @@ export default function App() {
 
   // ── log weight ─────────────────────────────────────────────────────────────
   const handleLogWeight = async (entry) => {
-    const withId = { ...entry, id: Date.now() };
+    const withId = { ...entry, id: nextEntryId() };
     saveWeightLocal(withId);
     setWeightLog(w => [...w, withId]);
     if (accessToken && sheetId) {

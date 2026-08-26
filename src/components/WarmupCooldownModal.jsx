@@ -1,11 +1,10 @@
 import { useState } from 'react';
 import TimerModal from './TimerModal';
-import ExerciseInfoModal from './ExerciseInfoModal';
 import { getWarmupExercises, getCooldownExercises } from '../data/warmupCooldown';
+import { openImageSearch } from '../utils/imageSearch';
 
 export default function WarmupCooldownModal({ type, dayType, onClose }) {
   const [timerEx, setTimerEx] = useState(null);
-  const [infoEx, setInfoEx]   = useState(null);
   const isWarmup  = type === 'warmup';
   const exercises = isWarmup ? getWarmupExercises(dayType) : getCooldownExercises(dayType);
   const totalMin  = Math.round(exercises.reduce((s, e) => s + e.duration_seconds, 0) / 60);
@@ -33,7 +32,7 @@ export default function WarmupCooldownModal({ type, dayType, onClose }) {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     <span style={{ fontWeight: 700, fontSize: 14, color: '#f8fafc', lineHeight: 1.3 }}>{ex.name}</span>
-                    <button onClick={() => setInfoEx(ex.name)} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontSize: 13, color: '#64748b', lineHeight: 1, flexShrink: 0 }}>ℹ️</button>
+                    <button onClick={() => openImageSearch(ex.name)} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontSize: 13, color: '#64748b', lineHeight: 1, flexShrink: 0 }}>ℹ️</button>
                   </div>
                   <div style={{ display: 'flex', gap: 6, flexShrink: 0, alignItems: 'center' }}>
                     <span style={{ background: accent + '33', color: accent, borderRadius: 8, padding: '2px 8px', fontSize: 12, fontWeight: 700 }}>{ex.duration_label}</span>
@@ -50,9 +49,6 @@ export default function WarmupCooldownModal({ type, dayType, onClose }) {
 
       {timerEx && (
         <TimerModal totalSeconds={timerEx.duration_seconds} label={timerEx.name} onClose={() => setTimerEx(null)} />
-      )}
-      {infoEx && (
-        <ExerciseInfoModal name={infoEx} onClose={() => setInfoEx(null)} />
       )}
     </div>
   );
