@@ -3,7 +3,7 @@ import TimerModal from './TimerModal';
 import { parseTimedReps } from '../utils/parseTimedReps';
 import { openImageSearch } from '../utils/imageSearch';
 
-export default function ExerciseCard({ ex, isDone, onToggle, onLogWeight, exerciseWeightLog, onDeleteWeight }) {
+export default function ExerciseCard({ ex, isDone, onToggle, onMarkDone, onLogWeight, exerciseWeightLog, onDeleteWeight }) {
   const [expanded, setExpanded] = useState(false);
   const [imgUrl, setImgUrl]     = useState(null);
   const [imgLoading, setImgLoading] = useState(false);
@@ -11,10 +11,12 @@ export default function ExerciseCard({ ex, isDone, onToggle, onLogWeight, exerci
   const [showTimer, setShowTimer] = useState(false);
   const [kg, setKg]             = useState('');
   const [reps, setReps]         = useState(String(ex.reps));
-  const [autoBase, setAutoBase] = useState('');
-  const [autoInc, setAutoInc]   = useState('');
-  const [autoSets, setAutoSets] = useState('');
-  const [autoBusy, setAutoBusy] = useState(false);
+  const [autoBase, setAutoBase]       = useState('');
+  const [autoInc, setAutoInc]         = useState('0');
+  const [autoBaseRep, setAutoBaseRep] = useState('');
+  const [autoIncRep, setAutoIncRep]   = useState('0');
+  const [autoSets, setAutoSets]       = useState('');
+  const [autoBusy, setAutoBusy]       = useState(false);
 
   const timerSeconds = parseTimedReps(ex.reps);
 
@@ -44,13 +46,19 @@ export default function ExerciseCard({ ex, isDone, onToggle, onLogWeight, exerci
   const todaySets = (exerciseWeightLog || []).filter(e => e.date === today);
   const nextSetNum = todaySets.length + 1;
 
-  const prevBest = (exerciseWeightLog || [])
-    .filter(e => e.date < today && e.weight)
-    .reduce((best, e) => (!best || e.weight > best.weight) ? e : best, null);
+  const prevDaySets = (exerciseWeightLog || []).filter(e => e.date < today);
+  const lastDate = prevDaySets.reduce((m, e) => e.date > m ? e.date : m, '');
+  const lastSets = lastDate ? prevDaySets.filter(e => e.date === lastDate) : [];
+  const lastDateLabel = lastDate ? new Date(lastDate + 'T00:00:00').toLocaleDateString(undefined, { day: 'numeric', month: 'short' }) : '';
+
+  const markDone = (setIdx) => {
+    if (setIdx < ex.sets) onMarkDone(setIdx);
+  };
 
   const handleLog = () => {
     if (!kg) return;
     onLogWeight({ exercise: ex.name, weight: parseFloat(kg), reps: reps || String(ex.reps), date: today, notes: '' });
+    markDone(todaySets.length);
     setKg('');
     setReps(String(ex.reps));
   };
@@ -61,14 +69,21 @@ export default function ExerciseCard({ ex, isDone, onToggle, onLogWeight, exerci
   const handleAutofill = async () => {
     const base = parseFloat(autoBase);
     if (isNaN(base) || autoCount < 1 || autoBusy) return;
-    const inc = parseFloat(autoInc) || 0;
+    const inc     = parseFloat(autoInc) || 0;
+    const baseRep = parseInt(autoBaseRep, 10);
+    const incRep  = parseInt(autoIncRep, 10) || 0;
+    const startIdx = todaySets.length;
     setAutoBusy(true);
     for (let i = 0; i < autoCount; i++) {
-      await onLogWeight({ exercise: ex.name, weight: Math.round((base + i * inc) * 100) / 100, reps: reps || String(ex.reps), date: today, notes: '' });
+      const repVal = isNaN(baseRep) ? (reps || String(ex.reps)) : String(Math.max(baseRep + i * incRep, 1));
+      await onLogWeight({ exercise: ex.name, weight: Math.max(Math.round((base + i * inc) * 100) / 100, 0), reps: repVal, date: today, notes: '' });
+      markDone(startIdx + i);
     }
     setAutoBusy(false);
     setAutoBase('');
-    setAutoInc('');
+    setAutoInc('0');
+    setAutoBaseRep('');
+    setAutoIncRep('0');
     setAutoSets('');
   };
 
@@ -85,8 +100,13 @@ export default function ExerciseCard({ ex, isDone, onToggle, onLogWeight, exerci
               <span>🔁 {ex.sets} × {ex.reps}</span>
               {ex.rest !== '—' && <span>⏱ {ex.rest}</span>}
               {ex.muscle && <span style={{ background: '#f1f5f9', color: '#475569', borderRadius: 6, padding: '1px 7px', fontSize: 11, fontWeight: 600 }}>💪 {ex.muscle}</span>}
-              {prevBest && <span style={{ background: '#fffbeb', color: '#b45309', borderRadius: 6, padding: '1px 7px', fontSize: 11, fontWeight: 600 }}>🏆 {prevBest.weight}kg × {prevBest.reps}</span>}
             </div>
+            {lastSets.length > 0 && (
+              <div style={{ display: 'inline-flex', gap: 6, marginTop: 5, background: '#fffbeb', color: '#b45309', borderRadius: 6, padding: '2px 7px', fontSize: 11, fontWeight: 600, flexWrap: 'wrap', alignItems: 'center' }}>
+                <span>🏋️ {lastDateLabel}:</span>
+                <span>{lastSets.map(s => `${s.weight}kg×${s.reps}`).join(' · ')}</span>
+              </div>
+            )}
           </div>
           <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
             {allDone && <span style={{ color: '#22c55e', fontWeight: 900, fontSize: 18, lineHeight: 1 }}>✓</span>}
@@ -114,36 +134,40 @@ export default function ExerciseCard({ ex, isDone, onToggle, onLogWeight, exerci
         {/* weight logger */}
         {showLog && (
           <div style={{ marginTop: 10, padding: '10px 12px', background: '#f8fafc', borderRadius: 10, border: '1px solid #e2e8f0' }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: '#475569', marginBottom: 8 }}>📊 Sets logged today</div>
-            {todaySets.length > 0 && (
-              <div style={{ marginBottom: 10, display: 'flex', flexDirection: 'column', gap: 4 }}>
-                {todaySets.map((e, i) => (
-                  <div key={e.id ?? i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#fff', borderRadius: 8, padding: '6px 10px', border: '1px solid #e2e8f0' }}>
-                    <span style={{ fontSize: 12, color: '#475569' }}>Set {i + 1}</span>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: '#1d4ed8' }}>{e.weight}kg × {e.reps}</span>
-                    <button onClick={() => onDeleteWeight(e)} style={{ background: 'none', border: 'none', color: '#ef4444', fontSize: 16, cursor: 'pointer', padding: '0 4px', lineHeight: 1 }}>✕</button>
-                  </div>
-                ))}
-              </div>
-            )}
-            <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 6 }}>Set {nextSetNum}</div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
-              <input value={kg} onChange={e => setKg(e.target.value)} placeholder="kg" type="number" inputMode="decimal" style={{ padding: '8px 10px', borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 14, minWidth: 0 }} />
-              <input value={reps} onChange={e => setReps(e.target.value)} placeholder="reps" type="number" inputMode="numeric" style={{ padding: '8px 10px', borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 14, minWidth: 0 }} />
-            </div>
-            <button onClick={handleLog} style={{ width: '100%', padding: '9px', background: '#1d4ed8', color: '#fff', borderRadius: 8, border: 'none', fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>Save Set {nextSetNum}</button>
-
             {/* autofill */}
-            <div style={{ marginTop: 12, paddingTop: 10, borderTop: '1px dashed #e2e8f0' }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: '#475569', marginBottom: 6 }}>⚡ Autofill sets</div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 8 }}>
-                <input value={autoBase} onChange={e => setAutoBase(e.target.value)} placeholder="base kg" type="number" inputMode="decimal" style={{ padding: '8px 10px', borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 14, minWidth: 0 }} />
-                <input value={autoInc} onChange={e => setAutoInc(e.target.value)} placeholder="+kg/set" type="number" inputMode="decimal" style={{ padding: '8px 10px', borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 14, minWidth: 0 }} />
-                <input value={autoSets} onChange={e => setAutoSets(e.target.value)} placeholder={`sets (${remainingSets})`} type="number" inputMode="numeric" style={{ padding: '8px 10px', borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 14, minWidth: 0 }} />
-              </div>
-              <button onClick={handleAutofill} disabled={autoBusy || !autoBase || autoCount < 1} style={{ width: '100%', padding: '9px', background: (autoBusy || !autoBase || autoCount < 1) ? '#94a3b8' : '#7c3aed', color: '#fff', borderRadius: 8, border: 'none', fontWeight: 700, fontSize: 14, cursor: (autoBusy || !autoBase || autoCount < 1) ? 'default' : 'pointer' }}>
-                {autoBusy ? 'Saving…' : autoCount >= 1 ? `⚡ Autofill & save sets ${nextSetNum}–${nextSetNum + autoCount - 1}` : '⚡ Autofill'}
+            <div style={{ fontSize: 12, fontWeight: 700, color: '#475569', marginBottom: 6 }}>⚡ Autofill sets</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
+              <input value={autoBase} onChange={e => setAutoBase(e.target.value)} placeholder="base kg" type="number" inputMode="decimal" style={{ padding: '8px 10px', borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 14, minWidth: 0 }} />
+              <input value={autoInc} onChange={e => setAutoInc(e.target.value)} placeholder="+kg/set" type="number" inputMode="decimal" style={{ padding: '8px 10px', borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 14, minWidth: 0 }} />
+              <input value={autoBaseRep} onChange={e => setAutoBaseRep(e.target.value)} placeholder={`base reps (${ex.reps})`} type="number" inputMode="numeric" style={{ padding: '8px 10px', borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 14, minWidth: 0 }} />
+              <input value={autoIncRep} onChange={e => setAutoIncRep(e.target.value)} placeholder="+reps/set" type="number" inputMode="numeric" style={{ padding: '8px 10px', borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 14, minWidth: 0 }} />
+            </div>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+              <input value={autoSets} onChange={e => setAutoSets(e.target.value)} placeholder={`sets (${remainingSets})`} type="number" inputMode="numeric" style={{ width: 90, padding: '8px 10px', borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 14, minWidth: 0, flexShrink: 0 }} />
+              <button onClick={handleAutofill} disabled={autoBusy || !autoBase || autoCount < 1} style={{ flex: 1, padding: '9px', background: (autoBusy || !autoBase || autoCount < 1) ? '#94a3b8' : '#7c3aed', color: '#fff', borderRadius: 8, border: 'none', fontWeight: 700, fontSize: 14, cursor: (autoBusy || !autoBase || autoCount < 1) ? 'default' : 'pointer' }}>
+                {autoBusy ? 'Saving…' : autoCount >= 1 ? `⚡ Save sets ${nextSetNum}–${nextSetNum + autoCount - 1}` : '⚡ Autofill'}
               </button>
+            </div>
+
+            <div style={{ paddingTop: 10, borderTop: '1px dashed #e2e8f0' }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: '#475569', marginBottom: 8 }}>📊 Sets logged today</div>
+              {todaySets.length > 0 && (
+                <div style={{ marginBottom: 10, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  {todaySets.map((e, i) => (
+                    <div key={e.id ?? i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#fff', borderRadius: 8, padding: '6px 10px', border: '1px solid #e2e8f0' }}>
+                      <span style={{ fontSize: 12, color: '#475569' }}>Set {i + 1}</span>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: '#1d4ed8' }}>{e.weight}kg × {e.reps}</span>
+                      <button onClick={() => onDeleteWeight(e)} style={{ background: 'none', border: 'none', color: '#ef4444', fontSize: 16, cursor: 'pointer', padding: '0 4px', lineHeight: 1 }}>✕</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 6 }}>Set {nextSetNum}</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
+                <input value={kg} onChange={e => setKg(e.target.value)} placeholder="kg" type="number" inputMode="decimal" style={{ padding: '8px 10px', borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 14, minWidth: 0 }} />
+                <input value={reps} onChange={e => setReps(e.target.value)} placeholder="reps" type="number" inputMode="numeric" style={{ padding: '8px 10px', borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 14, minWidth: 0 }} />
+              </div>
+              <button onClick={handleLog} style={{ width: '100%', padding: '9px', background: '#1d4ed8', color: '#fff', borderRadius: 8, border: 'none', fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>Save Set {nextSetNum}</button>
             </div>
           </div>
         )}

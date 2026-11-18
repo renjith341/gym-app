@@ -236,6 +236,18 @@ export default function App() {
     syncProgress(key, value);
   };
 
+  // idempotent mark-done — safe for rapid successive calls (weight-log autofill)
+  const markSetDone = (monthIdx, weekIdx, dayIdx, exIdx, setIdx) => {
+    const key = `m${monthIdx+1}-w${weekIdx+1}-d${dayIdx+1}-e${exIdx}-s${setIdx}`;
+    setProgress(prev => {
+      if (prev[key]) return prev;
+      const next = { ...prev, [key]: true };
+      saveProgressLocal(next);
+      syncProgress(key, true);
+      return next;
+    });
+  };
+
   const isSetDone = (mi, wi, di, ei, si) => !!progress[`m${mi+1}-w${wi+1}-d${di+1}-e${ei}-s${si}`];
 
   // ── log weight ─────────────────────────────────────────────────────────────
@@ -447,6 +459,7 @@ export default function App() {
             ex={ex}
             isDone={si => isSetDone(activeMonth, activeWeek, activeDay, ei, si)}
             onToggle={si => toggleSet(activeMonth, activeWeek, activeDay, ei, si)}
+            onMarkDone={si => markSetDone(activeMonth, activeWeek, activeDay, ei, si)}
             onLogWeight={handleLogWeight}
             exerciseWeightLog={weightLog.filter(e => e.exercise === ex.name)}
             onDeleteWeight={handleDeleteWeight}
